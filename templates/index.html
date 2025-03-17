@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye-Tracking Experiment</title>
+    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+        .hidden { display: none; }
+        .calibration-circle {
+            position: absolute;
+            width: 40px; height: 40px;
+            background-color: red;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .image-container {
+            position: absolute;
+            width: 200px;
+        }
+        #play-sound-btn {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen">
+        <h1>Welcome to the Eye-Tracking Experiment</h1>
+        <p>Click "Start Calibration" to begin.</p>
+        <button onclick="startCalibration()">Start Calibration</button>
+    </div>
+
+    <!-- Calibration Screen -->
+    <div id="calibration-screen" class="hidden">
+        <h2>Calibration</h2>
+        <p>Click on all 9 red circles to calibrate.</p>
+    </div>
+
+    <!-- Experiment Screen -->
+    <div id="experiment-screen" class="hidden">
+        <h2>Look at the Images While the Sound is Playing</h2>
+        <button id="play-sound-btn" onclick="playSound()">Play Sound</button>
+        <audio id="audio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
+        <button id="end-experiment-btn" class="hidden" onclick="endExperiment()">End Experiment</button>
+    </div>
+
+    <script>
+        let gazeData = [];
+        let calibrationClicks = 0;
+        let imageElements = [];
+
+        function startCalibration() {
+            document.getElementById("welcome-screen").classList.add("hidden");
+            document.getElementById("calibration-screen").classList.remove("hidden");
+
+            let positions = [
+                [50, 50], [window.innerWidth / 2, 50], [window.innerWidth - 100, 50],
+                [50, window.innerHeight / 2], [window.innerWidth / 2, window.innerHeight / 2], [window.innerWidth - 100, window.innerHeight / 2],
+                [50, window.innerHeight - 100], [window.innerWidth / 2, window.innerHeight - 100], [window.innerWidth - 100, window.innerHeight - 100]
+            ];
+
+            positions.forEach(pos => {
+                let circle = document.createElement("div");
+                circle.className = "calibration-circle";
+                circle.style.left = pos[0] + "px";
+                circle.style.top = pos[1] + "px";
+                circle.onclick = () => {
+                    circle.remove();
+                    calibrationClicks++;
+                    if (calibrationClicks === 9) {
+                        startWebgazer();
+                    }
+                };
+                document.body.appendChild(circle);
+            });
+        }
+
+        function startWebgazer() {
+            document.getElementById("calibration-screen").classList.add("hidden");
+            let startBtn = document.createElement("button");
+            startBtn.textContent = "Start Experiment";
+            startBtn.onclick = startExperiment;
+            document.body.appendChild(startBtn);
+        }
+
+        function startExperiment() {
+            document.body.innerHTML = '';  // Clear previous content
+            document.body.appendChild(document.getElementById("experiment-screen"));
+            document.getElementById("experiment-screen").classList.remove("hidden");
+
+            webgazer.setGazeListener((data, timestamp) => {
+                if (data) {
+                    gazeData.push({x: data.x, y: data.y, time: timestamp});
+                }
+            }).begin();
+
+            let images = ["dropper.png", "swab.png", "test_cassette.png", "test_tube.png"];
+            let positions = [
+                [50, 50], [window.innerWidth - 250, 50],
+                [50, window.innerHeight - 250], [window.innerWidth - 250, window.innerHeight - 250]
+            ];
+
+            images = images.sort(() => Math.random() - 0.5);
+            positions = positions.sort(() => Math.random() - 0.5);
+
+            images.forEach((img, index) => {
+                let imgElement = document.createElement("img");
+                imgElement.src = `static/${img}`;
+                imgElement.className = "image-container";
+                imgElement.style.left = positions[index][0] + "px";
+                imgElement.style.top = positions[index][1] + "px";
+                document.body.appendChild(imgElement);
+            });
+        }
+
+        function playSound() {
+            document.getElementById("audio").play();
+            document.getElementById("play-sound-btn").classList.add("hidden");
+
+            setTimeout(() => {
+                document.getElementById("end-experiment-btn").classList.remove("hidden");
+            }, document.getElementById("audio").duration * 1000);
+        }
+
+        function endExperiment() {
+            webgazer.end();
+            fetch("/save_gaze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(gazeData)
+            }).then(response => response.json())
+            .then(data => alert(data.message));
+        }
+    </script>
+</body>
+</html>
