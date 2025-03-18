@@ -54,11 +54,13 @@
     <script>
         let gazeData = [];
         let calibrationClicks = 0;
-        let imageElements = [];
 
         function startCalibration() {
             document.getElementById("welcome-screen").classList.add("hidden");
             document.getElementById("calibration-screen").classList.remove("hidden");
+
+            // Start WebGazer as soon as calibration begins
+            webgazer.setGazeListener((data, timestamp) => {}).begin();
 
             let positions = [
                 [50, 50], [window.innerWidth / 2, 50], [window.innerWidth - 100, 50],
@@ -75,29 +77,32 @@
                     circle.remove();
                     calibrationClicks++;
                     if (calibrationClicks === 9) {
-                        startWebgazer();
+                        finishCalibration();
                     }
                 };
                 document.body.appendChild(circle);
             });
         }
 
-        function startWebgazer() {
+        function finishCalibration() {
             document.getElementById("calibration-screen").classList.add("hidden");
+
             let startBtn = document.createElement("button");
             startBtn.textContent = "Start Experiment";
-            startBtn.onclick = startExperiment;
+            startBtn.onclick = () => {
+                webgazer.resume();  // Ensure WebGazer keeps running
+                startExperiment();
+            };
             document.body.appendChild(startBtn);
         }
 
         function startExperiment() {
-            document.body.innerHTML = '';  // Clear previous content
-            document.body.appendChild(document.getElementById("experiment-screen"));
             document.getElementById("experiment-screen").classList.remove("hidden");
 
+            // Keep WebGazer tracking gaze data
             webgazer.setGazeListener((data, timestamp) => {
                 if (data) {
-                    gazeData.push({x: data.x, y: data.y, time: timestamp});
+                    gazeData.push({ x: data.x, y: data.y, time: timestamp });
                 }
             }).begin();
 
