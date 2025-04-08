@@ -59,20 +59,35 @@
             document.getElementById("welcome-screen").classList.add("hidden");
             document.getElementById("calibration-screen").classList.remove("hidden");
 
-            // Start WebGazer as soon as calibration begins
+            // Start WebGazer
             webgazer.setGazeListener((data, timestamp) => {}).begin();
 
-            let positions = [
+            // Move WebGazer camera preview out of the way
+            setTimeout(() => {
+                const videoElement = document.querySelector("video");
+                if (videoElement) {
+                    videoElement.style.position = "absolute";
+                    videoElement.style.top = "10px";
+                    videoElement.style.right = "10px";
+                    videoElement.style.left = "auto";
+                    videoElement.style.width = "150px";
+                    videoElement.style.height = "120px";
+                    videoElement.style.border = "2px solid red";
+                }
+            }, 2000);
+
+            // Create 9 calibration circles
+            const positions = [
                 [50, 50], [window.innerWidth / 2, 50], [window.innerWidth - 100, 50],
                 [50, window.innerHeight / 2], [window.innerWidth / 2, window.innerHeight / 2], [window.innerWidth - 100, window.innerHeight / 2],
                 [50, window.innerHeight - 100], [window.innerWidth / 2, window.innerHeight - 100], [window.innerWidth - 100, window.innerHeight - 100]
             ];
 
             positions.forEach(pos => {
-                let circle = document.createElement("div");
+                const circle = document.createElement("div");
                 circle.className = "calibration-circle";
-                circle.style.left = pos[0] + "px";
-                circle.style.top = pos[1] + "px";
+                circle.style.left = `${pos[0]}px`;
+                circle.style.top = `${pos[1]}px`;
                 circle.onclick = () => {
                     circle.remove();
                     calibrationClicks++;
@@ -87,10 +102,10 @@
         function finishCalibration() {
             document.getElementById("calibration-screen").classList.add("hidden");
 
-            let startBtn = document.createElement("button");
+            const startBtn = document.createElement("button");
             startBtn.textContent = "Start Experiment";
             startBtn.onclick = () => {
-                webgazer.resume();  // Ensure WebGazer keeps running
+                webgazer.resume();  // Make sure WebGazer keeps running
                 startExperiment();
             };
             document.body.appendChild(startBtn);
@@ -99,28 +114,28 @@
         function startExperiment() {
             document.getElementById("experiment-screen").classList.remove("hidden");
 
-            // Keep WebGazer tracking gaze data
+            // Track gaze points
             webgazer.setGazeListener((data, timestamp) => {
                 if (data) {
                     gazeData.push({ x: data.x, y: data.y, time: timestamp });
                 }
             }).begin();
 
-            let images = ["dropper.png", "swab.png", "test_cassette.png", "test_tube.png"];
-            let positions = [
+            const images = ["dropper.png", "swab.png", "test_cassette.png", "test_tube.png"];
+            const positions = [
                 [50, 50], [window.innerWidth - 250, 50],
                 [50, window.innerHeight - 250], [window.innerWidth - 250, window.innerHeight - 250]
             ];
 
-            images = images.sort(() => Math.random() - 0.5);
-            positions = positions.sort(() => Math.random() - 0.5);
+            images.sort(() => Math.random() - 0.5);
+            positions.sort(() => Math.random() - 0.5);
 
-            images.forEach((img, index) => {
-                let imgElement = document.createElement("img");
+            images.forEach((img, i) => {
+                const imgElement = document.createElement("img");
                 imgElement.src = `static/${img}`;
                 imgElement.className = "image-container";
-                imgElement.style.left = positions[index][0] + "px";
-                imgElement.style.top = positions[index][1] + "px";
+                imgElement.style.left = `${positions[i][0]}px`;
+                imgElement.style.top = `${positions[i][1]}px`;
                 document.body.appendChild(imgElement);
             });
         }
@@ -136,12 +151,13 @@
 
         function endExperiment() {
             webgazer.end();
+
             fetch("/save_gaze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(gazeData)
-            }).then(response => response.json())
-            .then(data => alert(data.message));
+            }).then(res => res.json())
+              .then(data => alert(data.message));
         }
     </script>
 </body>
