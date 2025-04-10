@@ -14,6 +14,7 @@
             background-color: red;
             border-radius: 50%;
             cursor: pointer;
+            z-index: 9999; /* Make sure circles stay on top */
         }
         .image-container {
             position: absolute;
@@ -62,21 +63,23 @@
             // Start WebGazer
             webgazer.setGazeListener((data, timestamp) => {}).begin();
 
-            // Move WebGazer camera preview out of the way
-            setTimeout(() => {
-                const videoElement = document.querySelector("video");
-                if (videoElement) {
-                    videoElement.style.position = "absolute";
-                    videoElement.style.top = "10px";
-                    videoElement.style.right = "10px";
-                    videoElement.style.left = "auto";
-                    videoElement.style.width = "150px";
-                    videoElement.style.height = "120px";
-                    videoElement.style.border = "2px solid red";
+            // Repeatedly check until WebGazer facecam exists, then move it
+            let moveCameraInterval = setInterval(() => {
+                const video = document.querySelector("video");
+                if (video) {
+                    video.style.position = "absolute";
+                    video.style.top = "10px";
+                    video.style.right = "10px";
+                    video.style.left = "auto";
+                    video.style.width = "150px";
+                    video.style.height = "120px";
+                    video.style.zIndex = "10000";
+                    video.style.border = "2px solid red";
+                    clearInterval(moveCameraInterval); // Stop the interval
                 }
-            }, 2000);
+            }, 500);
 
-            // Create 9 calibration circles
+            // Place 9 calibration circles
             const positions = [
                 [50, 50], [window.innerWidth / 2, 50], [window.innerWidth - 100, 50],
                 [50, window.innerHeight / 2], [window.innerWidth / 2, window.innerHeight / 2], [window.innerWidth - 100, window.innerHeight / 2],
@@ -91,6 +94,7 @@
                 circle.onclick = () => {
                     circle.remove();
                     calibrationClicks++;
+                    console.log(`Calibration clicks: ${calibrationClicks}`);
                     if (calibrationClicks === 9) {
                         finishCalibration();
                     }
@@ -105,7 +109,7 @@
             const startBtn = document.createElement("button");
             startBtn.textContent = "Start Experiment";
             startBtn.onclick = () => {
-                webgazer.resume();  // Make sure WebGazer keeps running
+                webgazer.resume();
                 startExperiment();
             };
             document.body.appendChild(startBtn);
@@ -114,7 +118,6 @@
         function startExperiment() {
             document.getElementById("experiment-screen").classList.remove("hidden");
 
-            // Track gaze points
             webgazer.setGazeListener((data, timestamp) => {
                 if (data) {
                     gazeData.push({ x: data.x, y: data.y, time: timestamp });
