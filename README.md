@@ -82,7 +82,7 @@ This project is deployed on [Render.com](https://render.com) and can be shared v
 **Luis Ramirez**  
 Undergraduate Research Assistant  
 [B.A. in Computer Science - East Carolina University (2023–2026)](https://github.com/LuisR-ecu)  
-📄 [Resume / Research Profile](https://example.com/luis-resume-or-profile)
+📄 [Resume / Research Profile](www.linkedin.com/in/ramirez-luis-hernandez)
 
 ---
 
