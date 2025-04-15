@@ -1,12 +1,10 @@
-from flask import Flask, render_template, request, jsonify
-import pandas as pd
-import os
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from datetime import datetime
+import os
+import pandas as pd
 
 app = Flask(__name__)
-
-DATA_DIR = "gaze_data"
-os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs("gaze_data", exist_ok=True)
 
 @app.route("/")
 def index():
@@ -15,13 +13,30 @@ def index():
 @app.route("/save_gaze", methods=["POST"])
 def save_gaze():
     data = request.json
+    print("✅ Received POST to /save_gaze")
+
+    if not data:
+        print("⚠️ No gaze data received!")
+        return jsonify({"message": "No data received"}), 400
+
+    print(f"📦 Received {len(data)} gaze points")
+
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = os.path.join(DATA_DIR, f"gaze_data_{timestamp}.xlsx")
+    filename = f"gaze_data_{timestamp}.xlsx"
+    filepath = os.path.join("gaze_data", filename)
 
-    df = pd.DataFrame(data)
-    df.to_excel(filename, index=False)
+    try:
+        df = pd.DataFrame(data)
+        df.to_excel(filepath, index=False)
+        print(f"✅ Data written to: {filepath}")
+        return jsonify({
+            "message": "Data saved",
+            "download_url": f"/download/{filename}"
+        }), 200
+    except Exception as e:
+        print("❌ Error saving data:", e)
+        return jsonify({"message": "Failed to save data"}), 500
 
-    return jsonify({"message": "Data saved successfully"}), 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+@app.route("/download/<filename>")
+def download_file(filename):
+    return send_from_directory("gaze_data", filename, as_attachment=True)
