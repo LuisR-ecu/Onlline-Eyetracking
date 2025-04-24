@@ -40,3 +40,6 @@ def save_gaze():
 @app.route("/download/<filename>")
 def download_file(filename):
     return send_from_directory("gaze_data", filename, as_attachment=True)
+
+if __name__ == "__main__":
+    app.run(debug=True)
