@@ -1,166 +1,148 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eye-Tracking Experiment</title>
-    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+    <title>Eye Tracking Experiment</title>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; }
-        .hidden { display: none; }
-        .calibration-circle {
+        body { margin: 0; overflow: hidden; background-color: #fff; font-family: sans-serif; }
+        #gazeDot {
             position: absolute;
-            width: 40px; height: 40px;
+            width: 15px;
+            height: 15px;
             background-color: red;
             border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        .calibration-dot {
+            width: 20px;
+            height: 20px;
+            background: blue;
+            position: absolute;
+            border-radius: 50%;
             cursor: pointer;
-            z-index: 9999; /* Make sure circles stay on top */
         }
-        .image-container {
+        .dummy-box {
             position: absolute;
-            width: 200px;
-        }
-        #play-sound-btn {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            padding: 10px 20px;
-            font-size: 16px;
+            width: 150px;
+            height: 150px;
+            border: 2px dashed gray;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
-    <!-- Welcome Screen -->
-    <div id="welcome-screen">
-        <h1>Welcome to the Eye-Tracking Experiment</h1>
-        <p>Click "Start Calibration" to begin.</p>
+    <div id="gazeDot"></div>
+    <div id="welcome" style="position:absolute;top:30%;left:10%;width:80%;text-align:center;">
+        <h1>Welcome to the Eye Tracking Experiment</h1>
+        <p>Please click the 9 calibration dots to begin. These help align your eye movement with your screen.</p>
         <button onclick="startCalibration()">Start Calibration</button>
     </div>
 
-    <!-- Calibration Screen -->
-    <div id="calibration-screen" class="hidden">
-        <h2>Calibration</h2>
-        <p>Click on all 9 red circles to calibrate.</p>
+    <div id="calibration" style="display:none;"></div>
+    <div id="experiment" style="display:none;text-align:center;">
+        <button onclick="playAudio()" id="playBtn">Play Sound</button>
+        <audio id="stimulusAudio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
     </div>
 
-    <!-- Experiment Screen -->
-    <div id="experiment-screen" class="hidden">
-        <h2>Look at the Images While the Sound is Playing</h2>
-        <button id="play-sound-btn" onclick="playSound()">Play Sound</button>
-        <audio id="audio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
-        <button id="end-experiment-btn" class="hidden" onclick="endExperiment()">End Experiment</button>
-    </div>
-
+    <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
     <script>
+        let isCalibrating = true;
         let gazeData = [];
-        let calibrationClicks = 0;
+
+        const calibrationPoints = [
+            [5, 5], [50, 5], [95, 5],
+            [5, 50], [50, 50], [95, 50],
+            [5, 95], [50, 95], [95, 95]
+        ];
+
+        let clickedPoints = 0;
 
         function startCalibration() {
-            document.getElementById("welcome-screen").classList.add("hidden");
-            document.getElementById("calibration-screen").classList.remove("hidden");
-
-            // Start WebGazer
-            webgazer.setGazeListener((data, timestamp) => {}).begin();
-
-            // Repeatedly check until WebGazer facecam exists, then move it
-            let moveCameraInterval = setInterval(() => {
-                const video = document.querySelector("video");
-                if (video) {
-                    video.style.position = "absolute";
-                    video.style.top = "10px";
-                    video.style.right = "10px";
-                    video.style.left = "auto";
-                    video.style.width = "150px";
-                    video.style.height = "120px";
-                    video.style.zIndex = "10000";
-                    video.style.border = "2px solid red";
-                    clearInterval(moveCameraInterval); // Stop the interval
-                }
-            }, 500);
-
-            // Place 9 calibration circles
-            const positions = [
-                [50, 50], [window.innerWidth / 2, 50], [window.innerWidth - 100, 50],
-                [50, window.innerHeight / 2], [window.innerWidth / 2, window.innerHeight / 2], [window.innerWidth - 100, window.innerHeight / 2],
-                [50, window.innerHeight - 100], [window.innerWidth / 2, window.innerHeight - 100], [window.innerWidth - 100, window.innerHeight - 100]
-            ];
-
-            positions.forEach(pos => {
-                const circle = document.createElement("div");
-                circle.className = "calibration-circle";
-                circle.style.left = `${pos[0]}px`;
-                circle.style.top = `${pos[1]}px`;
-                circle.onclick = () => {
-                    circle.remove();
-                    calibrationClicks++;
-                    console.log(`Calibration clicks: ${calibrationClicks}`);
-                    if (calibrationClicks === 9) {
+            document.getElementById('welcome').style.display = 'none';
+            const cal = document.getElementById('calibration');
+            cal.style.display = 'block';
+            calibrationPoints.forEach((pos, idx) => {
+                const dot = document.createElement("div");
+                dot.className = "calibration-dot";
+                dot.style.left = pos[0] + "vw";
+                dot.style.top = pos[1] + "vh";
+                dot.onclick = () => {
+                    dot.style.background = 'gray';
+                    clickedPoints++;
+                    if (clickedPoints >= 9) {
                         finishCalibration();
                     }
                 };
-                document.body.appendChild(circle);
+                cal.appendChild(dot);
             });
-        }
 
-        function finishCalibration() {
-            document.getElementById("calibration-screen").classList.add("hidden");
-
-            const startBtn = document.createElement("button");
-            startBtn.textContent = "Start Experiment";
-            startBtn.onclick = () => {
-                webgazer.resume();
-                startExperiment();
-            };
-            document.body.appendChild(startBtn);
-        }
-
-        function startExperiment() {
-            document.getElementById("experiment-screen").classList.remove("hidden");
+            // Dummy boxes to guide gaze
+            ['top','bottom'].forEach((v, vi) => {
+                ['left','right'].forEach((h, hi) => {
+                    const box = document.createElement("div");
+                    box.className = "dummy-box";
+                    box.style.top = (vi * 90) + "vh";
+                    box.style.left = (hi * 90) + "vw";
+                    document.body.appendChild(box);
+                });
+            });
 
             webgazer.setGazeListener((data, timestamp) => {
-                if (data) {
-                    gazeData.push({ x: data.x, y: data.y, time: timestamp });
+                if (data == null) return;
+                const dot = document.getElementById('gazeDot');
+                dot.style.left = data.x + 'px';
+                dot.style.top = data.y + 'px';
+
+                if (!isCalibrating) {
+                    gazeData.push({
+                        x: data.x,
+                        y: data.y,
+                        t: timestamp,
+                        normX: 4 * (data.x / window.innerWidth - 0.5),
+                        normY: 4 * (data.y / window.innerHeight - 0.5)
+                    });
                 }
             }).begin();
 
-            const images = ["dropper.png", "swab.png", "test_cassette.png", "test_tube.png"];
-            const positions = [
-                [50, 50], [window.innerWidth - 250, 50],
-                [50, window.innerHeight - 250], [window.innerWidth - 250, window.innerHeight - 250]
-            ];
+            webgazer.showVideo(true);
+            webgazer.showFaceOverlay(true);
+            webgazer.showFaceFeedbackBox(true);
 
-            images.sort(() => Math.random() - 0.5);
-            positions.sort(() => Math.random() - 0.5);
-
-            images.forEach((img, i) => {
-                const imgElement = document.createElement("img");
-                imgElement.src = `static/${img}`;
-                imgElement.className = "image-container";
-                imgElement.style.left = `${positions[i][0]}px`;
-                imgElement.style.top = `${positions[i][1]}px`;
-                document.body.appendChild(imgElement);
-            });
+            document.addEventListener('mousemove', mouseMoveHandler);
         }
 
-        function playSound() {
-            document.getElementById("audio").play();
-            document.getElementById("play-sound-btn").classList.add("hidden");
+        function mouseMoveHandler(event) {
+            if (isCalibrating) {
+                const dot = document.getElementById('gazeDot');
+                dot.style.left = event.clientX + 'px';
+                dot.style.top = event.clientY + 'px';
+            }
+        }
+
+        function finishCalibration() {
+            isCalibrating = false;
+            document.getElementById('calibration').style.display = 'none';
+            document.getElementById('experiment').style.display = 'block';
+
+            webgazer.showVideo(false);
+            webgazer.showFaceOverlay(false);
+            webgazer.showFaceFeedbackBox(false);
+            document.removeEventListener('mousemove', mouseMoveHandler);
+        }
+
+        function playAudio() {
+            document.getElementById('playBtn').style.display = 'none';
+            const audio = document.getElementById('stimulusAudio');
+            audio.play();
 
             setTimeout(() => {
-                document.getElementById("end-experiment-btn").classList.remove("hidden");
-            }, document.getElementById("audio").duration * 1000);
-        }
-
-        function endExperiment() {
-            webgazer.end();
-
-            fetch("/save_gaze", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(gazeData)
-            }).then(res => res.json())
-              .then(data => alert(data.message));
+                fetch("/save_gaze", {
+                    method: "POST",
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({gaze: gazeData})
+                }).then(() => alert("Experiment complete! Data saved."));
+            }, 10000); // assumes 10s audio
         }
     </script>
 </body>
