@@ -28,18 +28,20 @@
             cursor: pointer;
             z-index: 20;
         }
-        .dummy-box {
-            position: absolute;
-            width: 150px;
-            height: 150px;
-            border: 2px dashed gray;
-            z-index: 10;
-        }
         .stim-img {
             position: absolute;
             width: 50vw;
             height: 50vh;
             object-fit: contain;
+            z-index: 10;
+        }
+        #overlay-buttons {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 30;
         }
     </style>
 </head>
@@ -48,29 +50,27 @@
 <div id="gazeDot"></div>
 
 <!-- Welcome screen -->
-<div id="welcome" style="position:absolute;top:30%;left:10%;width:80%;text-align:center;">
+<div id="welcome" style="position:absolute;top:30%;left:10%;width:80%;text-align:center;z-index:50;">
     <h1>Welcome to the Eye Tracking Experiment</h1>
     <p>Click below to begin calibration.</p>
     <button onclick="startCalibration()">Start Calibration</button>
 </div>
 
-<!-- Calibration phase -->
-<div id="calibration" style="display:none;"></div>
-
-<!-- Experiment phase -->
+<!-- Experiment area (real images shown from start) -->
 <div id="experiment" style="display:none;">
     <img id="img1" class="stim-img" src="{{ url_for('static', filename='dropper.png') }}">
     <img id="img2" class="stim-img" src="{{ url_for('static', filename='swab.png') }}">
     <img id="img3" class="stim-img" src="{{ url_for('static', filename='test_tube.png') }}">
     <img id="img4" class="stim-img" src="{{ url_for('static', filename='test_cassette.png') }}">
-
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
-        <button id="playBtn" onclick="playAudio()">Play Sound</button>
-        <button id="saveBtn" onclick="saveData()" style="display:none;">End Experiment / Save Data</button>
-    </div>
-
-    <audio id="stimulusAudio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
 </div>
+
+<!-- Buttons appear only when needed -->
+<div id="overlay-buttons" style="display:none;">
+    <button id="playBtn" onclick="playAudio()">Play Sound</button>
+    <button id="saveBtn" onclick="saveData()" style="display:none;">End Experiment / Save Data</button>
+</div>
+
+<audio id="stimulusAudio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
 
 <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
 <script>
@@ -99,8 +99,7 @@
     function startCalibration() {
         isCalibrating = true;
         document.getElementById('welcome').style.display = 'none';
-        const cal = document.getElementById('calibration');
-        cal.style.display = 'block';
+        document.getElementById('experiment').style.display = 'block';
 
         webgazer.begin()
             .then(() => {
@@ -125,47 +124,35 @@
                         clicked++;
                         if (clicked === 9) finishCalibration();
                     };
-                    cal.appendChild(dot);
+                    document.body.appendChild(dot);
                 });
 
-                // Add dummy boxes
-                ['top','bottom'].forEach((v, vi) => {
-                    ['left','right'].forEach((h, hi) => {
-                        const box = document.createElement("div");
-                        box.className = "dummy-box";
-                        box.style.top = (vi * 90) + "vh";
-                        box.style.left = (hi * 90) + "vw";
-                        document.body.appendChild(box);
-                    });
-                });
+                // Arrange images immediately in 2x2 grid
+                const w = window.innerWidth / 2;
+                const h = window.innerHeight / 2;
+                document.getElementById('img1').style.left = "0px";
+                document.getElementById('img1').style.top = "0px";
+                document.getElementById('img2').style.left = w + "px";
+                document.getElementById('img2').style.top = "0px";
+                document.getElementById('img3').style.left = "0px";
+                document.getElementById('img3').style.top = h + "px";
+                document.getElementById('img4').style.left = w + "px";
+                document.getElementById('img4').style.top = h + "px";
             });
     }
 
     // Finish calibration
     function finishCalibration() {
         isCalibrating = false;
-        document.getElementById('calibration').style.display = 'none';
-        document.getElementById('experiment').style.display = 'block';
 
-        // Hide face video after calibration
-        webgazer.showVideo(false);
-        webgazer.showFaceOverlay(false);
-        webgazer.showFaceFeedbackBox(false);
+        // Hide the calibration dots
+        document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
 
         // Hide mouse cursor
         document.body.style.cursor = 'none';
 
-        // Position 2x2 images perfectly touching edges
-        const w = window.innerWidth / 2;
-        const h = window.innerHeight / 2;
-        document.getElementById('img1').style.left = "0px";
-        document.getElementById('img1').style.top = "0px";
-        document.getElementById('img2').style.left = w + "px";
-        document.getElementById('img2').style.top = "0px";
-        document.getElementById('img3').style.left = "0px";
-        document.getElementById('img3').style.top = h + "px";
-        document.getElementById('img4').style.left = w + "px";
-        document.getElementById('img4').style.top = h + "px";
+        // Show Play button
+        document.getElementById('overlay-buttons').style.display = 'block';
     }
 
     // Play sound and show save button after audio ends
@@ -178,7 +165,7 @@
         };
     }
 
-    // Send gaze data to server
+    // Save gaze data to backend
     function saveData() {
         fetch('/save_gaze', {
             method: 'POST',
