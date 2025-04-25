@@ -1,10 +1,14 @@
-
 <!DOCTYPE html>
 <html>
 <head>
     <title>Eye Tracking Experiment</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #fff; font-family: sans-serif; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #fff;
+            font-family: sans-serif;
+        }
         #gazeDot {
             position: absolute;
             width: 15px;
@@ -21,6 +25,7 @@
             position: absolute;
             border-radius: 50%;
             cursor: pointer;
+            z-index: 20;
         }
         .dummy-box {
             position: absolute;
@@ -29,55 +34,97 @@
             border: 2px dashed gray;
             z-index: 10;
         }
+        .stim-img {
+            position: absolute;
+            width: 25vw;
+            height: 25vh;
+        }
     </style>
 </head>
 <body>
     <div id="gazeDot"></div>
+
+    <!-- Welcome screen -->
     <div id="welcome" style="position:absolute;top:30%;left:10%;width:80%;text-align:center;">
         <h1>Welcome to the Eye Tracking Experiment</h1>
-        <p>Please click the 9 calibration dots to begin. These help align your eye movement with your screen.</p>
+        <p>Click the button below to start calibration by clicking 9 dots on the screen.</p>
         <button onclick="startCalibration()">Start Calibration</button>
     </div>
 
+    <!-- Calibration area -->
     <div id="calibration" style="display:none;"></div>
-    <div id="experiment" style="display:none;text-align:center;">
-        <button onclick="playAudio()" id="playBtn">Play Sound</button>
+
+    <!-- Experiment interface -->
+    <div id="experiment" style="display:none;">
+        <img id="img1" class="stim-img" src="{{ url_for('static', filename='dropper.png') }}">
+        <img id="img2" class="stim-img" src="{{ url_for('static', filename='swab.png') }}">
+        <img id="img3" class="stim-img" src="{{ url_for('static', filename='test_tube.png') }}">
+        <img id="img4" class="stim-img" src="{{ url_for('static', filename='test_cassette.png') }}">
+
+        <div style="text-align:center;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);">
+            <button onclick="playAudio()" id="playBtn">Play Sound</button>
+            <button onclick="saveData()" id="saveBtn" style="display:none;">End Experiment / Save Data</button>
+        </div>
+
         <audio id="stimulusAudio" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
     </div>
 
     <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
     <script>
-        let isCalibrating = true;
+        let isCalibrating = false;
         let gazeData = [];
 
-        const calibrationPoints = [
-            [5, 5], [50, 5], [95, 5],
-            [5, 50], [50, 50], [95, 50],
-            [5, 95], [50, 95], [95, 95]
-        ];
+        // Start gaze tracking and update red dot
+        webgazer.setGazeListener((data, timestamp) => {
+            if (!data) return;
+            const dot = document.getElementById('gazeDot');
+            dot.style.left = data.x + 'px';
+            dot.style.top = data.y + 'px';
 
-        let clickedPoints = 0;
+            if (!isCalibrating) {
+                gazeData.push({
+                    x: data.x,
+                    y: data.y,
+                    t: timestamp,
+                    normX: 4 * (data.x / window.innerWidth - 0.5),
+                    normY: 4 * (data.y / window.innerHeight - 0.5)
+                });
+            }
+        });
 
+        // Begin calibration step
         function startCalibration() {
+            isCalibrating = true;
             document.getElementById('welcome').style.display = 'none';
             const cal = document.getElementById('calibration');
             cal.style.display = 'block';
-            calibrationPoints.forEach((pos, idx) => {
+
+            webgazer.begin();
+            webgazer.showVideo(true);
+            webgazer.showFaceOverlay(true);
+            webgazer.showFaceFeedbackBox(true);
+
+            const points = [
+                [5, 5], [50, 5], [95, 5],
+                [5, 50], [50, 50], [95, 50],
+                [5, 95], [50, 95], [95, 95]
+            ];
+
+            let clicked = 0;
+            points.forEach(pos => {
                 const dot = document.createElement("div");
                 dot.className = "calibration-dot";
                 dot.style.left = pos[0] + "vw";
                 dot.style.top = pos[1] + "vh";
                 dot.onclick = () => {
                     dot.style.background = 'gray';
-                    clickedPoints++;
-                    if (clickedPoints >= 9) {
-                        finishCalibration();
-                    }
+                    clicked++;
+                    if (clicked >= 9) finishCalibration();
                 };
                 cal.appendChild(dot);
             });
 
-            // Dummy boxes to guide gaze
+            // Add dummy gaze boxes to enforce full screen calibration
             ['top','bottom'].forEach((v, vi) => {
                 ['left','right'].forEach((h, hi) => {
                     const box = document.createElement("div");
@@ -87,39 +134,9 @@
                     document.body.appendChild(box);
                 });
             });
-
-            webgazer.setGazeListener((data, timestamp) => {
-                if (data == null) return;
-                const dot = document.getElementById('gazeDot');
-                dot.style.left = data.x + 'px';
-                dot.style.top = data.y + 'px';
-
-                if (!isCalibrating) {
-                    gazeData.push({
-                        x: data.x,
-                        y: data.y,
-                        t: timestamp,
-                        normX: 4 * (data.x / window.innerWidth - 0.5),
-                        normY: 4 * (data.y / window.innerHeight - 0.5)
-                    });
-                }
-            }).begin();
-
-            webgazer.showVideo(true);
-            webgazer.showFaceOverlay(true);
-            webgazer.showFaceFeedbackBox(true);
-
-            document.addEventListener('mousemove', mouseMoveHandler);
         }
 
-        function mouseMoveHandler(event) {
-            if (isCalibrating) {
-                const dot = document.getElementById('gazeDot');
-                dot.style.left = event.clientX + 'px';
-                dot.style.top = event.clientY + 'px';
-            }
-        }
-
+        // Calibration complete -> show experiment
         function finishCalibration() {
             isCalibrating = false;
             document.getElementById('calibration').style.display = 'none';
@@ -128,21 +145,38 @@
             webgazer.showVideo(false);
             webgazer.showFaceOverlay(false);
             webgazer.showFaceFeedbackBox(false);
-            document.removeEventListener('mousemove', mouseMoveHandler);
+
+            // Position 4 images centered, edge-aligned
+            const w = window.innerWidth / 2;
+            const h = window.innerHeight / 2;
+
+            document.getElementById('img1').style.left = "0px";
+            document.getElementById('img1').style.top = "0px";
+            document.getElementById('img2').style.left = w + "px";
+            document.getElementById('img2').style.top = "0px";
+            document.getElementById('img3').style.left = "0px";
+            document.getElementById('img3').style.top = h + "px";
+            document.getElementById('img4').style.left = w + "px";
+            document.getElementById('img4').style.top = h + "px";
         }
 
+        // Play sound, then allow user to save data
         function playAudio() {
-            document.getElementById('playBtn').style.display = 'none';
             const audio = document.getElementById('stimulusAudio');
+            document.getElementById('playBtn').style.display = 'none';
             audio.play();
+            audio.onended = () => {
+                document.getElementById('saveBtn').style.display = 'inline';
+            };
+        }
 
-            setTimeout(() => {
-                fetch("/save_gaze", {
-                    method: "POST",
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({gaze: gazeData})
-                }).then(() => alert("Experiment complete! Data saved."));
-            }, 10000); // assumes 10s audio
+        // Send data to server
+        function saveData() {
+            fetch("/save_gaze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gaze: gazeData })
+            }).then(() => alert("Data saved. Thank you!"));
         }
     </script>
 </body>
