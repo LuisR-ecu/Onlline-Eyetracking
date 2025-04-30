@@ -5,35 +5,37 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Ensure gaze_data folder exists
+# Ensure directory exists
 if not os.path.exists("gaze_data"):
     os.makedirs("gaze_data")
 
-# Serve main experiment page
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# Handle incoming gaze data from the frontend
 @app.route("/save_gaze", methods=["POST"])
 def save_gaze():
     data = request.get_json()
     gaze = data.get("gaze", [])
+    participant_id = data.get("participant_id", "unknown")
+    initials = data.get("initials", "")
 
     if not gaze:
         return jsonify({"status": "error", "message": "No gaze data received"}), 400
 
-    # Convert to DataFrame
-    df = pd.DataFrame(gaze)
-
-    # Timestamped filename
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"gaze_data/gaze_data_{timestamp}.xlsx"
-
     # Save to Excel
+    df = pd.DataFrame(gaze)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    # Safe file naming
+    safe_id = str(participant_id).replace(" ", "_")
+    safe_initials = str(initials).replace(" ", "_")
+
+    filename = f"gaze_data/{safe_id}_{safe_initials}_{timestamp}.xlsx"
     df.to_excel(filename, index=False)
 
     print(f"✅ Received POST to /save_gaze")
+    print(f"🧑‍💻 Participant: {participant_id} ({initials})")
     print(f"📦 Received {len(gaze)} gaze points")
     print(f"✅ Data written to: {filename}")
 
