@@ -154,10 +154,16 @@
     }
 
     function saveData() {
+        const pid = prompt("Enter participant ID:");
+        const initials = prompt("Enter your initials:");
         fetch('/save_gaze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gaze: gazeData })
+            body: JSON.stringify({ 
+                gaze: gazeData, 
+                participant_id: pid, 
+                initials: initials 
+            })
         }).then(() => {
             alert('Gaze data saved successfully!');
         });
