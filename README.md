@@ -1,24 +1,24 @@
 
 # Online Eye-Tracking Experiment
 
-This project is a web-based eye-tracking experiment built with **Flask**, **JavaScript**, **WebGazer.js**, **HTML**, and **Python**. It allows remote participants to complete a short calibration, view randomized images while listening to an audio prompt, and have their gaze data recorded in real-time.
+This project is a web-based eye-tracking experiment using **Flask**, **JavaScript**, **WebGazer.js**, and **Python**. It lets participants complete calibration, view randomized trials with images and audio, and records their gaze data for reaction time and gaze pattern analysis.
 
-All collected data (X and Y screen coordinates + timestamps) is automatically saved to an Excel file on the server after the experiment ends.
+All gaze data is saved automatically to Excel files for later analysis.
 
 ---
 
 ## 🔬 Features
 
-- 🔴 Calibration using 9 clickable circles
-- 🎥 Real-time gaze tracking using WebGazer.js
-- 🎧 Audio playback synchronized with visual stimuli
-- 🖼️ Randomized image placement and randomized trial types
-- 📊 Reaction time detection (how quickly the participant finds the correct image)
-- 📝 Demographics collection (ID, initials, age, gender, date)
-- 📂 Automatic gaze data collection and Excel export per participant
-- 📈 Automated local data analysis (reaction time bar chart and gaze scatter plot)
-- 🕒 Supports 20 randomized trials (configurable)
-- 🌐 Deployed using [Render](https://render.com)
+- **Consent + Participant ID** collection before trials.
+- **Calibration** using 9 evenly spaced clickable points.
+- **Real-time gaze tracking** via WebGazer.js.
+- **Images + Audio stimuli** randomized across trials.
+- **Flexible trial types**: silent, slow (casual audio), fast (rushed audio).
+- **Pauses with instructions** between each trial.
+- **Reaction time estimation** and gaze logging.
+- **Automatic Excel export** of gaze data.
+- **Graphing script** for reaction times & gaze scatter plots.
+- **Participant metadata** saved with data files.
 
 ---
 
@@ -27,96 +27,80 @@ All collected data (X and Y screen coordinates + timestamps) is automatically sa
 - Python 3.11
 - Flask
 - JavaScript + WebGazer.js
-- HTML5/CSS3
+- HTML5 / CSS3
 - Pandas + OpenPyXL
-- Matplotlib (for data visualization)
-- Watchdog (for local auto-analysis)
-- Render (for deployment)
+- Matplotlib + Seaborn (for data analysis)
+- Render (for online deployment)
 
 ---
 
 ## 🚀 How to Run Locally
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/LuisR-ecu/Onlline-Eyetracking.git
-   cd Onlline-Eyetracking
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the Flask app**
-   ```bash
-   python server.py
-   ```
-
-4. Open your browser and go to `http://localhost:5000`
-
----
-
-## 🔍 Automating Local Data Analysis (Optional)
-
-To automatically analyze and visualize data whenever a new Excel file is saved:
-
 ```bash
-python watch_gaze_folder.py
+git clone https://github.com/LuisR-ecu/Onlline-Eyetracking.git
+cd Onlline-Eyetracking
+pip install -r requirements.txt
+python server.py
 ```
 
-This will automatically run `analyze_data.py` when new gaze data is saved.
-
----
-
-## 📊 Manual Data Analysis
-
-If you prefer to manually analyze data:
-
-```bash
-python analyze_data.py
+Then open your browser and visit:
 ```
-
-This will:
-- Automatically load the latest Excel file from `gaze_data/`
-- Plot reaction time bar chart by trial
-- Plot gaze scatter plot with time progression
+http://localhost:5000
+```
 
 ---
 
 ## 📁 Project Structure
 
 ```
-/static/         → Images and audio used in the experiment  
-/templates/      → HTML frontend (index.html)  
+/static/         → Images and audio files used in the experiment  
+/templates/      → index.html (frontend interface)  
 server.py        → Flask backend server  
+analyze_data.py  → Script to analyze saved gaze data  
 requirements.txt → Python dependencies  
-gaze_data/       → Excel files with saved gaze tracking data  
-analyze_data.py  → Creates reaction time and gaze plots  
-watch_gaze_folder.py → Automatically runs analyze_data.py when new data is saved  
+gaze_data/       → Folder where Excel files are saved after each participant completes
 ```
 
 ---
 
-## 📂 Example Gaze Data
+## 🔍 Data Collected
 
-Each Excel file saved in the `gaze_data/` folder contains:
-- `x` → X coordinate of gaze
-- `y` → Y coordinate of gaze
-- `time` → Timestamp (seconds)
-- `normX` → Normalized X position
-- `normY` → Normalized Y position
+Each gaze data Excel file contains:
+
+- `x` → X coordinate (pixels)
+- `y` → Y coordinate (pixels)
+- `t` → Timestamp (milliseconds from trial start)
 - `trial` → Trial number
-- `audioType` → Silent / Fast audio / Slow audio
-- `reactionTime` → Time until participant looked at the correct image
-- `lookedAtTarget` → Boolean (True/False)
+- `type` → Trial type (silent, slow, fast)
 
 ---
 
-## 📦 Deployment
+## 📊 Data Analysis
 
-This project is deployed on [Render.com](https://render.com) and can be shared via a public link with participants.  
-The experiment works in modern browsers with webcam access.
+After running an experiment, set the correct filename in `analyze_data.py` and run:
+
+```bash
+python analyze_data.py
+```
+
+You’ll get:
+
+- **Reaction Time Plot** (first gaze timestamp per trial).
+- **Gaze Scatter Plot** (XY positions colored by trial).
+
+---
+
+## 📝 Participant Instructions (for pauses between trials)
+
+- **Silent** → Read each instruction and look at the matching image before continuing.
+- **Slow/Fast** → Listen to the audio instruction and look at the matching image.
+
+---
+
+## 🌐 Deployment
+
+This app is also configured for deployment on [Render.com](https://render.com)  
+(Instructions and production configuration available on request).
 
 ---
 
@@ -124,13 +108,5 @@ The experiment works in modern browsers with webcam access.
 
 **Luis Ramirez**  
 Undergraduate Research Assistant  
-[B.A. in Computer Science - East Carolina University (2023–2026)](https://github.com/LuisR-ecu)  
-📄 [Resume / Research Profile](https://www.linkedin.com/in/ramirez-luis-hernandez)
-
----
-
-## 📌 Notes
-
-- Ensure participants **allow webcam access** for WebGazer to function.
-- Data is stored temporarily on Render. Download Excel files regularly or switch to cloud storage for persistence.
-- Reaction time and gaze data can be plotted automatically or manually.
+[B.A. in Computer Science — East Carolina University (2023–2026)](https://github.com/LuisR-ecu)  
+📄 [Resume / Research Profile](www.linkedin.com/in/ramirez-luis-hernandez)
