@@ -1,7 +1,7 @@
 
 # Online Eye-Tracking Experiment
 
-This project is a web-based eye-tracking experiment using **Flask**, **JavaScript**, **WebGazer.js**, and **Python**. It lets participants complete calibration, view randomized trials with images and audio, and records their gaze data for reaction time and gaze pattern analysis.
+This project is a web-based eye-tracking experiment using Flask, JavaScript, WebGazer.js, and Python. It lets participants complete calibration, view randomized trials with images and audio, and records their gaze data for reaction time and gaze pattern analysis.
 
 All gaze data is saved automatically to Excel files for later analysis.
 
@@ -9,16 +9,16 @@ All gaze data is saved automatically to Excel files for later analysis.
 
 ## 🔬 Features
 
-- **Consent + Participant ID** collection before trials.
-- **Calibration** using 9 evenly spaced clickable points.
-- **Real-time gaze tracking** via WebGazer.js.
-- **Images + Audio stimuli** randomized across trials.
-- **Flexible trial types**: silent, slow (casual audio), fast (rushed audio).
-- **Pauses with instructions** between each trial.
-- **Reaction time estimation** and gaze logging.
-- **Automatic Excel export** of gaze data.
-- **Graphing script** for reaction times & gaze scatter plots.
-- **Participant metadata** saved with data files.
+- Consent + Participant ID collection before trials.
+- Calibration using 9 evenly spaced clickable points.
+- Real-time gaze tracking via WebGazer.js.
+- Images + Audio stimuli randomized across trials.
+- Flexible trial types: silent, slow (casual audio), fast (rushed audio).
+- Pauses with instructions between each trial.
+- Reaction time estimation and gaze logging.
+- Automatic Excel export of gaze data.
+- Graphing script for reaction times & gaze scatter plots.
+- Participant metadata saved with data files.
 
 ---
 
@@ -36,17 +36,34 @@ All gaze data is saved automatically to Excel files for later analysis.
 
 ## 🚀 How to Run Locally
 
+### Step 1: Clone the repository
 ```bash
 git clone https://github.com/LuisR-ecu/Onlline-Eyetracking.git
 cd Onlline-Eyetracking
+```
+
+### Step 2: Create and activate a virtual environment
+```bash
+python -m venv venv
+# Mac/Linux
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+```
+
+### Step 3: Install dependencies
+```bash
 pip install -r requirements.txt
+```
+
+### Step 4: Run the server
+```bash
 python server.py
 ```
 
-Then open your browser and visit:
-```
-http://localhost:5000
-```
+Then open your browser and go to:
+
+[http://localhost:5000](http://localhost:5000)
 
 ---
 
@@ -77,7 +94,7 @@ Each gaze data Excel file contains:
 
 ## 📊 Data Analysis
 
-After running an experiment, set the correct filename in `analyze_data.py` and run:
+After running an experiment, set the correct filename in **analyze_data.py** and run:
 
 ```bash
 python analyze_data.py
@@ -85,8 +102,8 @@ python analyze_data.py
 
 You’ll get:
 
-- **Reaction Time Plot** (first gaze timestamp per trial).
-- **Gaze Scatter Plot** (XY positions colored by trial).
+- Reaction Time Plot (first gaze timestamp per trial).
+- Gaze Scatter Plot (XY positions colored by trial).
 
 ---
 
@@ -99,7 +116,7 @@ You’ll get:
 
 ## 🌐 Deployment
 
-This app is also configured for deployment on [Render.com](https://render.com)  
+This app is also configured for deployment on Render.com.  
 (Instructions and production configuration available on request).
 
 ---
@@ -108,5 +125,5 @@ This app is also configured for deployment on [Render.com](https://render.com)
 
 **Luis Ramirez**  
 Undergraduate Research Assistant  
-[B.A. in Computer Science — East Carolina University (2023–2026)](https://github.com/LuisR-ecu)  
+B.A. in Computer Science — East Carolina University (2023–2026)  
 📄 [Resume / Research Profile](www.linkedin.com/in/ramirez-luis-hernandez)
