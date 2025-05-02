@@ -4,191 +4,220 @@
     <meta charset="UTF-8">
     <title>Eye Tracking Experiment</title>
     <style>
-        body { margin: 0; overflow: hidden; background: white; font-family: sans-serif; }
-        #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
-        .stim-img { position: absolute; width: 49vw; height: 49vh; object-fit: contain; z-index: 10; }
-        #overlay-buttons { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 30; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+        #gazeDot {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background: red;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        .calibration-dot {
+            width: 20px;
+            height: 20px;
+            background: blue;
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 20;
+        }
+        .stim-img {
+            position: absolute;
+            width: 20vw;
+            height: 20vh;
+            object-fit: contain;
+            z-index: 10;
+        }
+        #instructionText {
+            position: absolute;
+            top: 5vh;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+        }
+        #overlay-buttons {
+            position: absolute;
+            bottom: 5vh;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 30;
+        }
     </style>
 </head>
 <body>
 
-<div id="gazeDot"></div>
+<div id="gazeDot" style="display:none;"></div>
 
-<div id="welcome" style="position:absolute;top:10%;left:10%;width:80%;text-align:center;z-index:50;">
+<!-- Welcome / consent -->
+<div id="welcome" style="position:absolute;top:10vh;width:100%;text-align:center;">
     <h1>Welcome to the Eye Tracking Experiment</h1>
-    <p>By continuing, you consent to participate in this study.</p>
-    <p>Enter Participant ID and Initials:</p>
-    <input type="text" id="pid" placeholder="Participant ID"><br><br>
-    <input type="text" id="initials" placeholder="Initials"><br><br>
-    <p>Age: <input type="number" id="age"> Gender: <input type="text" id="gender"></p>
+    <p>Please enter your participant ID and initials, then click Start.</p>
+    <input id="pid" placeholder="Participant ID"><br><br>
+    <input id="initials" placeholder="Your initials"><br><br>
     <button onclick="startCalibration()">Start Calibration</button>
 </div>
 
+<!-- Experiment content -->
+<div id="instructionText"></div>
 <div id="experiment" style="display:none;">
-    <img id="img1" class="stim-img" src="{{ url_for('static', filename='dropper.png') }}">
-    <img id="img2" class="stim-img" src="{{ url_for('static', filename='swab.png') }}">
-    <img id="img3" class="stim-img" src="{{ url_for('static', filename='test_tube.png') }}">
-    <img id="img4" class="stim-img" src="{{ url_for('static', filename='test_cassette.png') }}">
+    <img id="img1" class="stim-img">
+    <img id="img2" class="stim-img">
+    <img id="img3" class="stim-img">
+    <img id="img4" class="stim-img">
 </div>
 
+<!-- Buttons -->
 <div id="overlay-buttons" style="display:none;">
-    <button id="nextTrialBtn" onclick="startTrial()">Start Trial</button>
+    <button id="continueBtn" onclick="nextTrial()">Continue</button>
 </div>
 
-<audio id="audioFast" src="{{ url_for('static', filename='rushed.wav') }}"></audio>
-<audio id="audioSlow" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
+<audio id="stimulusAudio"></audio>
 
 <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
 <script>
-let gazeData = [];
-let trialNum = 0;
-let NUM_TRIALS = 20;  // Change this to reduce trials for testing
-let isCalibrating = false;
-let instructionStartTime = null;
-let reactionRecorded = false;
-let trialOrder = [];
-let demographics = {};
+    let gazeData = [];
+    let trialIndex = 0;
+    let trials = {{ trials|tojson }};
+    let participantID = "";
+    let initials = "";
+    let isCalibrating = true;
+    let reactionLogged = false;
 
-const imgIds = ["img1", "img2", "img3", "img4"];
-const audioTypes = ["silent", "fast", "slow"];
-const instructionText = "Please locate the correct image as per the instructions.";
+    function startCalibration() {
+        participantID = document.getElementById('pid').value;
+        initials = document.getElementById('initials').value;
+        document.getElementById('welcome').style.display = 'none';
 
-// Randomize trials in advance
-for (let i = 0; i < NUM_TRIALS; i++) {
-    trialOrder.push(audioTypes[Math.floor(Math.random() * audioTypes.length)]);
-}
-
-webgazer.setGazeListener((data, timestamp) => {
-    if (!data) return;
-    const dot = document.getElementById('gazeDot');
-    dot.style.left = data.x + "px";
-    dot.style.top = data.y + "px";
-
-    if (!isCalibrating && instructionStartTime !== null) {
-        const elapsed = (Date.now() - instructionStartTime) / 1000;
-
-        const lookedAtTarget = isInTargetArea(data.x, data.y);
-        if (lookedAtTarget && !reactionRecorded) {
-            reactionRecorded = elapsed;
-        }
-
-        gazeData.push({
-            trial: trialNum,
-            time: elapsed.toFixed(2),
-            x: data.x,
-            y: data.y,
-            normX: 4 * (data.x / window.innerWidth - 0.5),
-            normY: 4 * (data.y / window.innerHeight - 0.5),
-            lookedAtTarget: lookedAtTarget,
-            reactionTime: reactionRecorded || "N/A"
+        webgazer.begin().then(() => {
+            webgazer.showVideo(true);
+            webgazer.showFaceOverlay(true);
+            webgazer.showFaceFeedbackBox(true);
+            startCalibrationDots();
         });
     }
-});
 
-// --- Calibration ---
-function startCalibration() {
-    isCalibrating = true;
-
-    demographics.pid = document.getElementById('pid').value;
-    demographics.initials = document.getElementById('initials').value;
-    demographics.age = document.getElementById('age').value;
-    demographics.gender = document.getElementById('gender').value;
-
-    document.getElementById('welcome').style.display = 'none';
-    document.getElementById('experiment').style.display = 'block';
-    document.getElementById('overlay-buttons').style.display = 'block';
-
-    webgazer.begin().then(() => {
-        webgazer.showVideo(true);
-        webgazer.showFaceOverlay(true);
-        webgazer.showFaceFeedbackBox(true);
-    });
-}
-
-// --- Trial Logic ---
-function startTrial() {
-    if (trialNum >= NUM_TRIALS) {
-        endExperiment();
-        return;
+    function startCalibrationDots() {
+        const positions = [[10,10],[50,10],[90,10],[10,50],[50,50],[90,50],[10,90],[50,90],[90,90]];
+        let clicks = 0;
+        positions.forEach(pos => {
+            const dot = document.createElement('div');
+            dot.className = 'calibration-dot';
+            dot.style.left = pos[0] + "vw";
+            dot.style.top = pos[1] + "vh";
+            dot.onclick = () => {
+                dot.style.background = 'gray';
+                clicks++;
+                if (clicks >= 9) finishCalibration();
+            };
+            document.body.appendChild(dot);
+        });
     }
 
-    reactionRecorded = false;
-    instructionStartTime = Date.now();
-
-    // Layout images
-    if (trialOrder[trialNum] === "silent") {
-        orderedLayout();
-    } else {
-        randomLayout();
+    function finishCalibration() {
+        document.querySelectorAll('.calibration-dot').forEach(e => e.remove());
+        webgazer.showVideo(false);
+        webgazer.showFaceOverlay(false);
+        webgazer.showFaceFeedbackBox(false);
+        document.body.style.cursor = 'none';
+        document.getElementById('gazeDot').style.display = 'none';
+        isCalibrating = false;
+        nextTrial();
     }
 
-    // Hide facecam and red dot during trials
-    webgazer.showFaceOverlay(false);
-    webgazer.showFaceFeedbackBox(false);
-    document.getElementById('gazeDot').style.display = 'none';
+    function nextTrial() {
+        document.body.style.cursor = 'default';
+        document.getElementById('overlay-buttons').style.display = 'none';
+        document.getElementById('instructionText').innerText = "";
 
-    // Play audio if needed
-    if (trialOrder[trialNum] === "fast") {
-        document.getElementById('audioFast').play();
-    } else if (trialOrder[trialNum] === "slow") {
-        document.getElementById('audioSlow').play();
+        if (trialIndex >= trials.length) {
+            saveData();
+            return;
+        }
+
+        let trial = trials[trialIndex];
+        showPauseScreen(trial.type);
     }
 
-    document.getElementById('nextTrialBtn').style.display = 'none';
+    function showPauseScreen(type) {
+        let instruction = "";
+        if (type === "silent") instruction = "Read the instructions carefully and look at the matching image.";
+        else instruction = "Listen to the instruction and look at the matching image.";
+        document.getElementById('instructionText').innerText = instruction;
+        document.getElementById('experiment').style.display = 'none';
+        document.getElementById('overlay-buttons').style.display = 'block';
+    }
 
-    // Show next trial button after 8 seconds
-    setTimeout(() => {
-        trialNum++;
-        document.getElementById('nextTrialBtn').style.display = 'inline';
-    }, 8000);
-}
+    function startTrial() {
+        document.body.style.cursor = 'none';
+        let trial = trials[trialIndex];
+        document.getElementById('experiment').style.display = 'block';
+        document.getElementById('overlay-buttons').style.display = 'none';
+        setImages(trial.images);
+        document.getElementById('instructionText').innerText = trial.text;
 
-// --- Layout functions ---
-function orderedLayout() {
-    document.getElementById('img1').style.left = "0px";
-    document.getElementById('img1').style.top = "0px";
-    document.getElementById('img2').style.left = window.innerWidth/2 + "px";
-    document.getElementById('img2').style.top = "0px";
-    document.getElementById('img3').style.left = "0px";
-    document.getElementById('img3').style.top = window.innerHeight/2 + "px";
-    document.getElementById('img4').style.left = window.innerWidth/2 + "px";
-    document.getElementById('img4').style.top = window.innerHeight/2 + "px";
-}
+        // Play audio if not silent
+        let audio = document.getElementById('stimulusAudio');
+        audio.src = trial.audio ? "{{ url_for('static', filename='') }}" + trial.audio : "";
+        reactionLogged = false;
+        if (trial.audio) {
+            audio.play();
+        }
 
-function randomLayout() {
-    let positions = [
-        ["0px","0px"],
-        [window.innerWidth/2 + "px", "0px"],
-        ["0px", window.innerHeight/2 + "px"],
-        [window.innerWidth/2 + "px", window.innerHeight/2 + "px"]
-    ];
-    positions = positions.sort(() => Math.random() - 0.5);
+        startGazeLogging(trial);
+    }
 
-    imgIds.forEach((img, idx) => {
-        document.getElementById(img).style.left = positions[idx][0];
-        document.getElementById(img).style.top = positions[idx][1];
-    });
-}
+    function setImages(imageFiles) {
+        let imgs = ["img1", "img2", "img3", "img4"];
+        imgs.forEach((id, idx) => {
+            let img = document.getElementById(id);
+            img.src = "{{ url_for('static', filename='') }}" + imageFiles[idx];
+            img.style.left = (idx % 2 === 0 ? "20vw" : "60vw");
+            img.style.top = (idx < 2 ? "30vh" : "60vh");
+        });
+    }
 
-function isInTargetArea(x, y) {
-    // We'll assume img1 is always the "correct" target
-    const rect = document.getElementById('img1').getBoundingClientRect();
-    return (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
-}
+    function startGazeLogging(trial) {
+        let trialStart = Date.now();
+        let gazeInterval = setInterval(() => {
+            webgazer.getCurrentPrediction().then(data => {
+                if (data && !reactionLogged) {
+                    let t = Date.now() - trialStart;
+                    gazeData.push({x: data.x, y: data.y, t: t, trial: trialIndex, type: trial.type});
 
-// --- End experiment ---
-function endExperiment() {
-    fetch('/save_gaze', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            gaze: gazeData,
-            demographics: demographics
-        })
-    }).then(() => {
-        alert('Data saved successfully!');
-    });
-}
+                    // TODO: Check if gaze over correct image and log reaction time
+                    // Simplified here, you would check data.x, data.y bounds
+
+                    if (t >= 5000) {  // 5 second trials for now
+                        clearInterval(gazeInterval);
+                        trialIndex++;
+                        nextTrial();
+                    }
+                }
+            });
+        }, 100);  // log every 100ms (~10 Hz)
+    }
+
+    function saveData() {
+        fetch('/save_gaze', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                gaze: gazeData,
+                participant_id: participantID,
+                initials: initials
+            })
+        }).then(() => {
+            alert("Data saved. Thank you for participating!");
+        });
+    }
 </script>
 </body>
 </html>
