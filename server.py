@@ -5,7 +5,6 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Create a folder to save gaze data if it doesn't exist
 if not os.path.exists('gaze_data'):
     os.makedirs('gaze_data')
 
@@ -17,15 +16,16 @@ def index():
 def save_gaze():
     data = request.get_json()
     gaze = data['gaze']
-    pid = data.get('participant_id', 'unknown')
-    initials = data.get('initials', 'unknown')
+    demographics = data['demographics']
 
     df = pd.DataFrame(gaze)
 
-    # Save with timestamp, PID and initials
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"gaze_data/gaze_data_{pid}_{initials}_{timestamp}.xlsx"
-    df.to_excel(filename, index=False)
+    filename = f"gaze_data/gaze_data_{demographics['pid']}_{demographics['initials']}_{timestamp}.xlsx"
+
+    with pd.ExcelWriter(filename) as writer:
+        df.to_excel(writer, index=False, sheet_name="Gaze Data")
+        pd.DataFrame([demographics]).to_excel(writer, index=False, sheet_name="Participant Info")
 
     print(f"✅ Data saved to {filename}")
     return jsonify({'status': 'success'})
