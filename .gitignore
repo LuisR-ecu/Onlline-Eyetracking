@@ -1,0 +1,32 @@
+
+# macOS system files
+.DS_Store
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Environment files
+venv/
+.env
+
+# Gaze data (optional - comment out if you want to track these)
+gaze_data/
+
+# VSCode settings (optional)
+.vscode/
+
+# Jupyter notebooks checkpoints (if used)
+.ipynb_checkpoints/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Logs
+*.log
+
+# Misc
+*.bak
+*.tmp
+
