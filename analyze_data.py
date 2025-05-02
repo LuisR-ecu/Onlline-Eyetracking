@@ -1,38 +1,37 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import glob
 import os
-import seaborn as sns
 
-# -------- CONFIG --------
-DATA_FOLDER = "gaze_data"
-# Replace this with the filename of the session you want to analyze:
-FILENAME = "your_file_here.xlsx"
-# ------------------------
+# --- Automatically find the latest Excel file ---
+list_of_files = glob.glob('gaze_data/*.xlsx')
+if not list_of_files:
+    raise FileNotFoundError("No Excel files found in gaze_data folder.")
+filename = max(list_of_files, key=os.path.getctime)
 
-# Load the data
-filepath = os.path.join(DATA_FOLDER, FILENAME)
-df = pd.read_excel(filepath)
+print(f"📊 Loading latest data file: {filename}")
 
-print("Data loaded:")
-print(df.head())
+# --- Read gaze data ---
+df = pd.read_excel(filename, sheet_name="Gaze Data")
 
-# -------- Reaction Time Plot --------
-plt.figure(figsize=(10, 5))
-reaction_times = df.groupby("trial")["t"].min() / 1000  # Convert ms to seconds
-reaction_times.plot(kind='bar')
-plt.xlabel("Trial")
-plt.ylabel("First gaze timestamp (s)")
-plt.title("Reaction Time per Trial")
+# --- Reaction Time Plot ---
+reaction_times = df[df['lookedAtTarget'] == True].groupby('trial')['reactionTime'].first()
+
+plt.figure(figsize=(10, 6))
+reaction_times.plot(kind='bar', color='skyblue')
+plt.title('Reaction Time by Trial')
+plt.ylabel('Seconds')
+plt.xlabel('Trial')
 plt.tight_layout()
 plt.show()
 
-# -------- Gaze Scatter Plot --------
+# --- Gaze Scatter ---
 plt.figure(figsize=(8, 6))
-sns.scatterplot(x="x", y="y", hue="trial", data=df, palette="tab10")
-plt.xlabel("X Coordinate")
-plt.ylabel("Y Coordinate")
-plt.title("Gaze Scatter Plot by Trial")
-plt.gca().invert_yaxis()  # Flip Y axis to match screen coordinates
-plt.legend(title="Trial")
+scatter = plt.scatter(df['x'], df['y'], c=df['time'], cmap='viridis', s=20)
+plt.title('Gaze Points Over Time')
+plt.xlabel('X position (pixels)')
+plt.ylabel('Y position (pixels)')
+plt.gca().invert_yaxis()
+plt.colorbar(scatter, label='Time (s)')
 plt.tight_layout()
 plt.show()
