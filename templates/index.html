@@ -76,20 +76,23 @@
 <script>
     let isCalibrating = false;
     let gazeData = [];
+    let gazeBuffer = [];  // Buffer to collect gaze points each second
+    let averageTimer;
 
     webgazer.setGazeListener((data, timestamp) => {
         if (!data) return;
+
+        // Move red dot
         const dot = document.getElementById('gazeDot');
         dot.style.left = data.x + "px";
         dot.style.top = data.y + "px";
 
+        // Only buffer data if NOT calibrating
         if (!isCalibrating) {
-            gazeData.push({
+            gazeBuffer.push({
                 x: data.x,
                 y: data.y,
-                t: timestamp,
-                normX: 4 * (data.x / window.innerWidth - 0.5),
-                normY: 4 * (data.y / window.innerHeight - 0.5)
+                t: timestamp
             });
         }
     });
@@ -105,6 +108,7 @@
                 webgazer.showFaceOverlay(true);
                 webgazer.showFaceFeedbackBox(true);
 
+                // Place calibration dots
                 const points = [
                     [5,5], [50,5], [95,5],
                     [5,50], [50,50], [95,50],
@@ -124,6 +128,7 @@
                     document.body.appendChild(dot);
                 });
 
+                // Position images
                 const w = window.innerWidth / 2;
                 const h = window.innerHeight / 2;
                 document.getElementById('img1').style.left = "0px";
@@ -142,13 +147,40 @@
         document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
         document.body.style.cursor = 'none';
         document.getElementById('overlay-buttons').style.display = 'block';
+
+        // Hide face overlay and red dot
+        webgazer.showVideo(false);
+        webgazer.showFaceOverlay(false);
+        webgazer.showFaceFeedbackBox(false);
+        document.getElementById('gazeDot').style.display = 'none';
     }
 
     function playAudio() {
         document.getElementById('playBtn').style.display = 'none';
         const audio = document.getElementById('stimulusAudio');
         audio.play();
+
+        // Start averaging gaze data every second
+        averageTimer = setInterval(() => {
+            if (gazeBuffer.length > 0) {
+                let avgX = gazeBuffer.reduce((sum, d) => sum + d.x, 0) / gazeBuffer.length;
+                let avgY = gazeBuffer.reduce((sum, d) => sum + d.y, 0) / gazeBuffer.length;
+                let avgTime = gazeBuffer[gazeBuffer.length - 1].t / 1000;  // convert to seconds
+
+                gazeData.push({
+                    x: avgX,
+                    y: avgY,
+                    time_sec: avgTime,
+                    normX: 4 * (avgX / window.innerWidth - 0.5),
+                    normY: 4 * (avgY / window.innerHeight - 0.5)
+                });
+
+                gazeBuffer = [];  // Reset buffer for next second
+            }
+        }, 1000);
+
         audio.onended = () => {
+            clearInterval(averageTimer); // Stop averaging when audio ends
             document.getElementById('saveBtn').style.display = 'inline';
         };
     }
