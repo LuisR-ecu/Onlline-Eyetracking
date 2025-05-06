@@ -8,6 +8,15 @@
         #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
         .stim-img { position: absolute; width: 49vw; height: 49vh; object-fit: contain; z-index: 10; }
         #overlay-buttons { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 30; }
+        .calibration-dot {
+            width: 20px;
+            height: 20px;
+            background: blue;
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 20;
+        }
     </style>
 </head>
 <body>
@@ -97,12 +106,51 @@ function startCalibration() {
     document.getElementById('welcome').style.display = 'none';
     document.getElementById('experiment').style.display = 'block';
     document.getElementById('overlay-buttons').style.display = 'block';
+    document.getElementById('nextTrialBtn').style.display = 'none';
 
     webgazer.begin().then(() => {
         webgazer.showVideo(true);
         webgazer.showFaceOverlay(true);
         webgazer.showFaceFeedbackBox(true);
     });
+
+    const points = [
+    [5,5], [50,5], [95,5],
+    [5,50], [50,50], [95,50],
+    [5,95], [50,95], [95,95]
+    ];
+    let clicked = 0;
+    points.forEach(pos => {
+        const dot = document.createElement("div");
+        dot.className = "calibration-dot";
+        dot.style.left = pos[0] + "vw";
+        dot.style.top = pos[1] + "vh";
+        dot.onclick = () => {
+        dot.style.background = 'gray';
+        clicked++;
+        if (clicked === 9) finishCalibration();
+        };
+        document.body.appendChild(dot);
+    });
+}
+
+// ---Prepare for the trials---
+function finishCalibration() {
+    isCalibrating = false;
+
+    // Remove calibration dots
+    document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
+
+    // Hide face overlays
+    webgazer.showVideo(false);
+    webgazer.showFaceOverlay(false);
+    webgazer.showFaceFeedbackBox(false);
+
+    // Hide mouse cursor
+    document.body.style.cursor = 'none';
+
+    // Finally, show Start Trial button
+    document.getElementById('nextTrialBtn').style.display = 'inline';
 }
 
 // --- Trial Logic ---
@@ -123,6 +171,7 @@ function startTrial() {
     }
 
     // Hide facecam and red dot during trials
+    webgazer.showVideo(false);
     webgazer.showFaceOverlay(false);
     webgazer.showFaceFeedbackBox(false);
     document.getElementById('gazeDot').style.display = 'none';
