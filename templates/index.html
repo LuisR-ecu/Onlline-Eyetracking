@@ -104,7 +104,7 @@ function startCalibration() {
     demographics.gender = document.getElementById('gender').value;
 
     document.getElementById('welcome').style.display = 'none';
-    document.getElementById('experiment').style.display = 'block';
+    //document.getElementById('experiment').style.display = 'block';
     document.getElementById('overlay-buttons').style.display = 'block';
     document.getElementById('nextTrialBtn').style.display = 'none';
 
@@ -150,6 +150,7 @@ function finishCalibration() {
     document.body.style.cursor = 'none';
 
     // Finally, show Start Trial button
+    document.getElementById('experiment').style.display = 'block';
     document.getElementById('nextTrialBtn').style.display = 'inline';
 }
 
