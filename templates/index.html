@@ -1,243 +1,204 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Eye Tracking Experiment</title>
-    <style>
-        body { margin: 0; overflow: hidden; background: white; font-family: sans-serif; }
-        #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
-        .stim-img { position: absolute; width: 49vw; height: 49vh; object-fit: contain; z-index: 10; }
-        #overlay-buttons { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 30; }
-        .calibration-dot {
-            width: 20px;
-            height: 20px;
-            background: blue;
-            position: absolute;
-            border-radius: 50%;
-            cursor: pointer;
-            z-index: 20;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Eye Tracking Experiment</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: white; font-family: sans-serif; }
+    #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
+    .stim-img { position: absolute; width: 40vw; height: 40vh; object-fit: contain; z-index: 10; }
+    .calibration-dot {
+      width: 20px; height: 20px; background: blue;
+      position: absolute; border-radius: 50%;
+      cursor: pointer; z-index: 30;
+    }
+    #instructionBox, #fixation, #endMessage {
+      position: absolute; top: 40%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center; z-index: 40; font-size: 20px;
+    }
+  </style>
 </head>
 <body>
 
 <div id="gazeDot"></div>
 
 <div id="welcome" style="position:absolute;top:10%;left:10%;width:80%;text-align:center;z-index:50;">
-    <h1>Welcome to the Eye Tracking Experiment</h1>
-    <p>By continuing, you consent to participate in this study.</p>
-    <p>Enter Participant ID and Initials:</p>
-    <input type="text" id="pid" placeholder="Participant ID"><br><br>
-    <input type="text" id="initials" placeholder="Initials"><br><br>
-    <p>Age: <input type="number" id="age"> Gender: <input type="text" id="gender"></p>
-    <button onclick="startCalibration()">Start Calibration</button>
+  <h1>Welcome to the Eye Tracking Experiment</h1>
+  <p>Enter Participant Info and click Start:</p>
+  <input type="text" id="pid" placeholder="Participant ID"><br><br>
+  <input type="text" id="initials" placeholder="Initials"><br><br>
+  <p>Age: <input type="number" id="age"> Gender: <input type="text" id="gender"></p>
+  <button onclick="startCalibration()">Start Calibration</button>
 </div>
 
 <div id="experiment" style="display:none;">
-    <img id="img1" class="stim-img" src="{{ url_for('static', filename='dropper.png') }}">
-    <img id="img2" class="stim-img" src="{{ url_for('static', filename='swab.png') }}">
-    <img id="img3" class="stim-img" src="{{ url_for('static', filename='test_tube.png') }}">
-    <img id="img4" class="stim-img" src="{{ url_for('static', filename='test_cassette.png') }}">
+  <img id="img1" class="stim-img" src="{{ url_for('static', filename='Colon Step 1.png') }}">
+  <img id="img2" class="stim-img" src="{{ url_for('static', filename='Colon Step 2.png') }}">
+  <img id="img3" class="stim-img" src="{{ url_for('static', filename='Colon Step 3.png') }}">
+  <img id="img4" class="stim-img" src="{{ url_for('static', filename='Colon Step 4.png') }}">
 </div>
 
-<div id="overlay-buttons" style="display:none;">
-    <button id="nextTrialBtn" onclick="startTrial()">Start Trial</button>
-</div>
+<div id="instructionBox" style="display:none;"></div>
+<div id="fixation" style="display:none;">+</div>
+<div id="endMessage" style="display:none;"><h1>Thank you for participating!</h1></div>
 
-<audio id="audioFast" src="{{ url_for('static', filename='rushed.wav') }}"></audio>
-<audio id="audioSlow" src="{{ url_for('static', filename='all_casual.wav') }}"></audio>
+<audio id="audioPlayer"></audio>
 
 <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
 <script>
 let gazeData = [];
 let trialNum = 0;
-let NUM_TRIALS = 20;  // Change this to reduce trials for testing
-let isCalibrating = false;
+const TRIAL_DURATION = 8000;
+const FIXATION_DURATION = 2000;
+const COUNTDOWN_DURATION = 10000;
+const countdownSeconds = 10; // Change this to set countdown
+
 let instructionStartTime = null;
 let reactionRecorded = false;
-let trialOrder = [];
+let isCalibrating = false;
 let demographics = {};
 
-const imgIds = ["img1", "img2", "img3", "img4"];
-const audioTypes = ["silent", "fast", "slow"];
-const instructionText = "Please locate the correct image as per the instructions.";
-
-// Randomize trials in advance
-for (let i = 0; i < NUM_TRIALS; i++) {
-    trialOrder.push(audioTypes[Math.floor(Math.random() * audioTypes.length)]);
-}
+const trialList = [
+  { type: "casual", audio: "best_colon_step1_casual.wav" },
+  { type: "clear",  audio: "best_colon_step1_clear.wav" },
+  { type: "casual", audio: "best_colon_step2_casual.wav" },
+  { type: "clear",  audio: "best_colon_step2_clear.wav" },
+  { type: "casual", audio: "best_colon_step3_casual.wav" },
+  { type: "clear",  audio: "best_colon_step3_clear.wav" },
+  { type: "casual", audio: "best_colon_step4_casual.wav" },
+  { type: "clear",  audio: "best_colon_step4_clear.wav" }
+];
 
 webgazer.setGazeListener((data, timestamp) => {
-    if (!data) return;
-    const dot = document.getElementById('gazeDot');
-    dot.style.left = data.x + "px";
-    dot.style.top = data.y + "px";
+  if (!data || isCalibrating || instructionStartTime === null) return;
 
-    if (!isCalibrating && instructionStartTime !== null) {
-        const elapsed = (Date.now() - instructionStartTime) / 1000;
+  const elapsed = (Date.now() - instructionStartTime) / 1000;
+  const rect = document.getElementById('img1').getBoundingClientRect();
+  const lookedAtTarget = (data.x >= rect.left && data.x <= rect.right && data.y >= rect.top && data.y <= rect.bottom);
 
-        const lookedAtTarget = isInTargetArea(data.x, data.y);
-        if (lookedAtTarget && !reactionRecorded) {
-            reactionRecorded = elapsed;
-        }
+  if (lookedAtTarget && !reactionRecorded) reactionRecorded = elapsed;
 
-        gazeData.push({
-            trial: trialNum,
-            time: elapsed.toFixed(2),
-            x: data.x,
-            y: data.y,
-            normX: 4 * (data.x / window.innerWidth - 0.5),
-            normY: 4 * (data.y / window.innerHeight - 0.5),
-            lookedAtTarget: lookedAtTarget,
-            reactionTime: reactionRecorded || "N/A"
-        });
-    }
+  gazeData.push({
+    trial: trialNum,
+    time: elapsed.toFixed(2),
+    x: data.x,
+    y: data.y,
+    normX: 4 * (data.x / window.innerWidth - 0.5),
+    normY: 4 * (data.y / window.innerHeight - 0.5),
+    lookedAtTarget: lookedAtTarget,
+    reactionTime: reactionRecorded || "N/A"
+  });
 });
 
-// --- Calibration ---
 function startCalibration() {
-    isCalibrating = true;
+  isCalibrating = true;
+  demographics = {
+    pid: document.getElementById('pid').value,
+    initials: document.getElementById('initials').value,
+    age: document.getElementById('age').value,
+    gender: document.getElementById('gender').value
+  };
 
-    demographics.pid = document.getElementById('pid').value;
-    demographics.initials = document.getElementById('initials').value;
-    demographics.age = document.getElementById('age').value;
-    demographics.gender = document.getElementById('gender').value;
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('experiment').style.display = 'block';
 
-    document.getElementById('welcome').style.display = 'none';
-    //document.getElementById('experiment').style.display = 'block';
-    document.getElementById('overlay-buttons').style.display = 'block';
-    document.getElementById('nextTrialBtn').style.display = 'none';
+  webgazer.begin().then(() => {
+    webgazer.showVideo(true);
+    webgazer.showFaceOverlay(true);
+    webgazer.showFaceFeedbackBox(true);
+  });
 
-    webgazer.begin().then(() => {
-        webgazer.showVideo(true);
-        webgazer.showFaceOverlay(true);
-        webgazer.showFaceFeedbackBox(true);
-    });
+  const positions = [[5,5],[50,5],[95,5],[5,50],[50,50],[95,50],[5,95],[50,95],[95,95]];
+  let clicked = 0;
 
-    const points = [
-    [5,5], [50,5], [95,5],
-    [5,50], [50,50], [95,50],
-    [5,95], [50,95], [95,95]
-    ];
-    let clicked = 0;
-    points.forEach(pos => {
-        const dot = document.createElement("div");
-        dot.className = "calibration-dot";
-        dot.style.left = pos[0] + "vw";
-        dot.style.top = pos[1] + "vh";
-        dot.onclick = () => {
-        dot.style.background = 'gray';
-        clicked++;
-        if (clicked === 9) finishCalibration();
-        };
-        document.body.appendChild(dot);
-    });
+  positions.forEach(([x, y]) => {
+    const dot = document.createElement("div");
+    dot.className = "calibration-dot";
+    dot.style.left = x + "vw";
+    dot.style.top = y + "vh";
+    dot.onclick = () => {
+      dot.style.background = 'gray';
+      clicked++;
+      if (clicked === 9) finishCalibration();
+    };
+    document.body.appendChild(dot);
+  });
 }
 
-// ---Prepare for the trials---
 function finishCalibration() {
-    isCalibrating = false;
-
-    // Remove calibration dots
-    document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
-
-    // Hide face overlays
-    webgazer.showVideo(false);
-    webgazer.showFaceOverlay(false);
-    webgazer.showFaceFeedbackBox(false);
-
-    // Hide mouse cursor
-    document.body.style.cursor = 'none';
-
-    // Finally, show Start Trial button
-    //document.getElementById('experiment').style.display = 'block';
-    document.getElementById('nextTrialBtn').style.display = 'inline';
+  isCalibrating = false;
+  document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
+  webgazer.showVideo(false);
+  webgazer.showFaceOverlay(false);
+  webgazer.showFaceFeedbackBox(false);
+  document.body.style.cursor = 'none';
+  startInstruction();
 }
 
-// --- Trial Logic ---
-function startTrial() {
-    if (trialNum >= NUM_TRIALS) {
-        endExperiment();
-        return;
-    }
-
-    reactionRecorded = false;
-    instructionStartTime = Date.now();
-
-    // Layout images
-    if (trialOrder[trialNum] === "silent") {
-        orderedLayout();
-    } else {
-        randomLayout();
-    }
-
-    // Hide facecam and red dot during trials
-    webgazer.showVideo(false);
-    webgazer.showFaceOverlay(false);
-    webgazer.showFaceFeedbackBox(false);
-    document.getElementById('gazeDot').style.display = 'none';
-
-    // Play audio if needed
-    if (trialOrder[trialNum] === "fast") {
-        document.getElementById('audioFast').play();
-    } else if (trialOrder[trialNum] === "slow") {
-        document.getElementById('audioSlow').play();
-    }
-
-    document.getElementById('nextTrialBtn').style.display = 'none';
-
-    // Show next trial button after 8 seconds
-    setTimeout(() => {
-        trialNum++;
-        document.getElementById('nextTrialBtn').style.display = 'inline';
-    }, 8000);
+function startInstruction() {
+  if (trialNum >= trialList.length) return endExperiment();
+  const trial = trialList[trialNum];
+  const box = document.getElementById("instructionBox");
+  box.style.display = "block";
+  box.innerText = trial.type === "casual"
+    ? "You will hear an instruction. Look at the image that matches what you hear."
+    : "You will hear a slow instruction. Look at the image that matches what you hear.";
+  setTimeout(() => {
+    box.style.display = "none";
+    showFixation();
+  }, 4000);
 }
 
-// --- Layout functions ---
-function orderedLayout() {
-    document.getElementById('img1').style.left = "0px";
-    document.getElementById('img1').style.top = "0px";
-    document.getElementById('img2').style.left = window.innerWidth/2 + "px";
-    document.getElementById('img2').style.top = "0px";
-    document.getElementById('img3').style.left = "0px";
-    document.getElementById('img3').style.top = window.innerHeight/2 + "px";
-    document.getElementById('img4').style.left = window.innerWidth/2 + "px";
-    document.getElementById('img4').style.top = window.innerHeight/2 + "px";
+function showFixation() {
+  const fix = document.getElementById("fixation");
+  fix.style.display = "block";
+  setTimeout(() => {
+    fix.style.display = "none";
+    startCountdown();
+  }, FIXATION_DURATION);
 }
 
-function randomLayout() {
-    let positions = [
-        ["0px","0px"],
-        [window.innerWidth/2 + "px", "0px"],
-        ["0px", window.innerHeight/2 + "px"],
-        [window.innerWidth/2 + "px", window.innerHeight/2 + "px"]
-    ];
-    positions = positions.sort(() => Math.random() - 0.5);
-
-    imgIds.forEach((img, idx) => {
-        document.getElementById(img).style.left = positions[idx][0];
-        document.getElementById(img).style.top = positions[idx][1];
-    });
+function startCountdown() {
+  instructionStartTime = Date.now();
+  reactionRecorded = false;
+  playAudioAndRunTrial();
 }
 
-function isInTargetArea(x, y) {
-    // We'll assume img1 is always the "correct" target
-    const rect = document.getElementById('img1').getBoundingClientRect();
-    return (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+function playAudioAndRunTrial() {
+  const trial = trialList[trialNum];
+  const audio = document.getElementById("audioPlayer");
+  audio.src = "{{ url_for('static', filename='') }}" + trial.audio;
+  audio.play();
+
+  // Position images
+  const positions = [
+    ["5vw", "5vh"],
+    ["55vw", "5vh"],
+    ["5vw", "50vh"],
+    ["55vw", "50vh"]
+  ];
+  [img1, img2, img3, img4].forEach((img, i) => {
+    img.style.left = positions[i][0];
+    img.style.top = positions[i][1];
+  });
+
+  setTimeout(() => {
+    trialNum++;
+    instructionStartTime = null;
+    startInstruction();
+  }, TRIAL_DURATION);
 }
 
-// --- End experiment ---
 function endExperiment() {
-    fetch('/save_gaze', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            gaze: gazeData,
-            demographics: demographics
-        })
-    }).then(() => {
-        alert('Data saved successfully!');
-    });
+  document.getElementById('experiment').style.display = 'none';
+  document.getElementById('endMessage').style.display = 'block';
+
+  fetch('/save_gaze', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ gaze: gazeData, demographics: demographics })
+  }).then(() => console.log('✅ Data saved.'));
 }
 </script>
 </body>

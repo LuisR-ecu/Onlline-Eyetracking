@@ -21,7 +21,7 @@ def save_gaze():
     df = pd.DataFrame(gaze)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"gaze_data/gaze_data_{demographics['pid']}_{demographics['initials']}_{timestamp}.xlsx"
+    filename = f"gaze_data/gaze_data_{demographics.get('pid', 'anon')}_{demographics.get('initials', 'na')}_{timestamp}.xlsx"
 
     with pd.ExcelWriter(filename) as writer:
         df.to_excel(writer, index=False, sheet_name="Gaze Data")

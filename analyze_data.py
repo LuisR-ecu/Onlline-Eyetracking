@@ -1,37 +1,63 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import glob
-import os
+import seaborn as sns
 
-# --- Automatically find the latest Excel file ---
-list_of_files = glob.glob('gaze_data/*.xlsx')
-if not list_of_files:
-    raise FileNotFoundError("No Excel files found in gaze_data folder.")
-filename = max(list_of_files, key=os.path.getctime)
+plt.switch_backend('Agg')  # Use headless backend for server environments
 
-print(f"📊 Loading latest data file: {filename}")
+gaze_data_dir = 'gaze_data'
 
-# --- Read gaze data ---
-df = pd.read_excel(filename, sheet_name="Gaze Data")
+def assign_quadrant(x, y, screen_width, screen_height):
+    if x < screen_width / 2 and y < screen_height / 2:
+        return 'Top-Left'
+    elif x >= screen_width / 2 and y < screen_height / 2:
+        return 'Top-Right'
+    elif x < screen_width / 2 and y >= screen_height / 2:
+        return 'Bottom-Left'
+    else:
+        return 'Bottom-Right'
 
-# --- Reaction Time Plot ---
-reaction_times = df[df['lookedAtTarget'] == True].groupby('trial')['reactionTime'].first()
+for file in os.listdir(gaze_data_dir):
+    if file.endswith('.xlsx'):
+        filepath = os.path.join(gaze_data_dir, file)
+        print(f"📄 Processing: {file}")
+        df = pd.read_excel(filepath, sheet_name='Gaze Data')
 
-plt.figure(figsize=(10, 6))
-reaction_times.plot(kind='bar', color='skyblue')
-plt.title('Reaction Time by Trial')
-plt.ylabel('Seconds')
-plt.xlabel('Trial')
-plt.tight_layout()
-plt.show()
+        df['time'] = pd.to_numeric(df['time'], errors='coerce')
+        df = df.dropna(subset=['time', 'x', 'y'])
 
-# --- Gaze Scatter ---
-plt.figure(figsize=(8, 6))
-scatter = plt.scatter(df['x'], df['y'], c=df['time'], cmap='viridis', s=20)
-plt.title('Gaze Points Over Time')
-plt.xlabel('X position (pixels)')
-plt.ylabel('Y position (pixels)')
-plt.gca().invert_yaxis()
-plt.colorbar(scatter, label='Time (s)')
-plt.tight_layout()
-plt.show()
+        df['bin'] = (df['time'] // 5).astype(int)
+        binned = df.groupby(['trial', 'bin']).agg({
+            'x': 'mean',
+            'y': 'mean',
+            'reactionTime': 'first',
+            'lookedAtTarget': 'max'
+        }).reset_index()
+
+        screen_width = 1280
+        screen_height = 720
+        binned['quadrant'] = binned.apply(lambda row: assign_quadrant(row['x'], row['y'], screen_width, screen_height), axis=1)
+
+        # Reaction Time Plot
+        rt_plot = binned[binned['lookedAtTarget'] == True].groupby('trial')['reactionTime'].first()
+        plt.figure(figsize=(10, 5))
+        rt_plot.plot(kind='bar')
+        plt.title('Reaction Time by Trial')
+        plt.ylabel('Seconds')
+        plt.xlabel('Trial')
+        plt.tight_layout()
+        plt.savefig(filepath.replace('.xlsx', '_reaction_time.png'))
+        plt.close()
+
+        # Quadrant Scatter Plot
+        plt.figure(figsize=(8, 6))
+        sns.scatterplot(data=binned, x='x', y='y', hue='quadrant', palette='tab10')
+        plt.gca().invert_yaxis()
+        plt.title('Binned Gaze Points by Quadrant')
+        plt.xlabel('X Coordinate')
+        plt.ylabel('Y Coordinate')
+        plt.tight_layout()
+        plt.savefig(filepath.replace('.xlsx', '_quadrants.png'))
+        plt.close()
+
+        print("✅ Saved plots for", file)
