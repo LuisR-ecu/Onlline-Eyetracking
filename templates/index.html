@@ -1,204 +1,402 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Eye Tracking Experiment</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: white; font-family: sans-serif; }
-    #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
-    .stim-img { position: absolute; width: 40vw; height: 40vh; object-fit: contain; z-index: 10; }
-    .calibration-dot {
-      width: 20px; height: 20px; background: blue;
-      position: absolute; border-radius: 50%;
-      cursor: pointer; z-index: 30;
-    }
-    #instructionBox, #fixation, #endMessage {
-      position: absolute; top: 40%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center; z-index: 40; font-size: 20px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Eye Tracking Experiment</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: white; font-family: sans-serif; }
+        #gazeDot { position: absolute; width: 15px; height: 15px; background: red; border-radius: 50%; pointer-events: none; z-index: 9999; }
+        .stim-img {
+            position: absolute;
+            /* Same visual size for all PNGs via fixed box */
+            width: 30vw;
+            height: 30vh;
+            object-fit: contain; /* preserve aspect without distortion */
+            transform: translate(-50%, -50%); /* position by center */
+            z-index: 10;
+        }
+        .calibration-dot {
+            width: 20px;
+            height: 20px;
+            background: blue;
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 20;
+        }
+        #instructionOverlay {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 2px solid black;
+            z-index: 50;
+            text-align: center;
+        }
+        #fixationCross {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 64px;
+            z-index: 40;
+        }
+    </style>
 </head>
 <body>
 
 <div id="gazeDot"></div>
 
 <div id="welcome" style="position:absolute;top:10%;left:10%;width:80%;text-align:center;z-index:50;">
-  <h1>Welcome to the Eye Tracking Experiment</h1>
-  <p>Enter Participant Info and click Start:</p>
-  <input type="text" id="pid" placeholder="Participant ID"><br><br>
-  <input type="text" id="initials" placeholder="Initials"><br><br>
-  <p>Age: <input type="number" id="age"> Gender: <input type="text" id="gender"></p>
-  <button onclick="startCalibration()">Start Calibration</button>
+    <h1>Welcome to the Eye Tracking Experiment</h1>
+    <p>Enter Participant ID and Initials:</p>
+    <input type="text" id="pid" placeholder="Participant ID"><br><br>
+    <input type="text" id="initials" placeholder="Initials"><br><br>
+    <p>Age: <input type="number" id="age"> Gender: <input type="text" id="gender"></p>
+    <button onclick="startCalibration()">Start Calibration</button>
 </div>
 
+<!-- Stimuli Images -->
 <div id="experiment" style="display:none;">
-  <img id="img1" class="stim-img" src="{{ url_for('static', filename='Colon Step 1.png') }}">
-  <img id="img2" class="stim-img" src="{{ url_for('static', filename='Colon Step 2.png') }}">
-  <img id="img3" class="stim-img" src="{{ url_for('static', filename='Colon Step 3.png') }}">
-  <img id="img4" class="stim-img" src="{{ url_for('static', filename='Colon Step 4.png') }}">
+    <!-- Colon -->
+    <img id="colon1" class="stim-img" src="{{ url_for('static', filename='step1_colon.png') }}">
+    <img id="colon2" class="stim-img" src="{{ url_for('static', filename='step2_colon.png') }}">
+    <img id="colon3" class="stim-img" src="{{ url_for('static', filename='step3_colon.png') }}">
+    <img id="colon4" class="stim-img" src="{{ url_for('static', filename='step4_colon.png') }}">
+
+    <!-- Covid -->
+    <img id="covid1" class="stim-img" src="{{ url_for('static', filename='step1_covid.png') }}">
+    <img id="covid2" class="stim-img" src="{{ url_for('static', filename='step2_covid.png') }}">
+    <img id="covid3" class="stim-img" src="{{ url_for('static', filename='step3_covid.png') }}">
+    <img id="covid4" class="stim-img" src="{{ url_for('static', filename='step4_covid.png') }}">
 </div>
 
-<div id="instructionBox" style="display:none;"></div>
-<div id="fixation" style="display:none;">+</div>
-<div id="endMessage" style="display:none;"><h1>Thank you for participating!</h1></div>
+<!-- Audio files -->
+{% for cond in ['colon', 'covid'] %}
+  {% for version in ['clear', 'casual'] %}
+    {% for step in range(1, 5) %}
+      <audio id="{{ cond }}_{{ version }}_{{ step }}" src="{{ url_for('static', filename='best_' + cond + '_step' + step|string + '_' + version + '.wav') }}"></audio>
+    {% endfor %}
+  {% endfor %}
+{% endfor %}
 
-<audio id="audioPlayer"></audio>
+<div id="instructionOverlay" style="display:none;">
+    <h2 id="instructionText"></h2>
+    <button id="instructionButton" style="margin-top:12px; display:none;">Continue</button>
+    <button id="beginButton" style="margin-top:12px; display:none;">Begin Experiment</button>
+    <button id="startCovidPractice" style="margin-top:12px; display:none;">Start COVID Practice</button>
+    <button id="startColonPractice" style="margin-top:12px; display:none;">Start COLON Practice</button>
+    <button id="nextAfterPractice" style="margin-top:12px; display:none;">Continue</button>
+</div>
+
+<div id="fixationCross" style="display:none;">+</div>
 
 <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
 <script>
+let trialSets = [];
+let currentTrialSet = 0;
+let stepIndex = 0; // 0..3 within a trial set
+let trialStartTime = null; // ms when audio for current step starts
 let gazeData = [];
-let trialNum = 0;
-const TRIAL_DURATION = 8000;
-const FIXATION_DURATION = 2000;
-const COUNTDOWN_DURATION = 10000;
-const countdownSeconds = 10; // Change this to set countdown
-
-let instructionStartTime = null;
-let reactionRecorded = false;
-let isCalibrating = false;
+let trialResults = [];
 let demographics = {};
+let countdownDuration = 10; // seconds
+let isFixating = false;
 
-const trialList = [
-  { type: "casual", audio: "best_colon_step1_casual.wav" },
-  { type: "clear",  audio: "best_colon_step1_clear.wav" },
-  { type: "casual", audio: "best_colon_step2_casual.wav" },
-  { type: "clear",  audio: "best_colon_step2_clear.wav" },
-  { type: "casual", audio: "best_colon_step3_casual.wav" },
-  { type: "clear",  audio: "best_colon_step3_clear.wav" },
-  { type: "casual", audio: "best_colon_step4_casual.wav" },
-  { type: "clear",  audio: "best_colon_step4_clear.wav" }
-];
+// Reaction time tracking for current instruction
+let currentTargetIndex = null; // 1..4 corresponding to quadrant number
+let rtRecorded = false;
+let pendingRT = null;
 
+// --- Define all trial sets ---
+['colon', 'covid'].forEach(type => {
+    for (let i = 0; i < 10; i++) {
+        trialSets.push({
+            type,
+            order: shuffle([1, 2, 3, 4]),
+            version: Math.random() < 0.5 ? 'clear' : 'casual'
+        });
+    }
+});
+trialSets = shuffle(trialSets);
+
+// --- Gaze Listener ---
 webgazer.setGazeListener((data, timestamp) => {
-  if (!data || isCalibrating || instructionStartTime === null) return;
+    if (!data) return;
+    if (trialStartTime !== null) {
+        gazeData.push({
+            trialSet: currentTrialSet,
+            step: stepIndex + 1,
+            target: currentTargetIndex,
+            time: (Date.now() - trialStartTime) / 1000,
+            x: data.x,
+            y: data.y
+        });
+    }
 
-  const elapsed = (Date.now() - instructionStartTime) / 1000;
-  const rect = document.getElementById('img1').getBoundingClientRect();
-  const lookedAtTarget = (data.x >= rect.left && data.x <= rect.right && data.y >= rect.top && data.y <= rect.bottom);
-
-  if (lookedAtTarget && !reactionRecorded) reactionRecorded = elapsed;
-
-  gazeData.push({
-    trial: trialNum,
-    time: elapsed.toFixed(2),
-    x: data.x,
-    y: data.y,
-    normX: 4 * (data.x / window.innerWidth - 0.5),
-    normY: 4 * (data.y / window.innerHeight - 0.5),
-    lookedAtTarget: lookedAtTarget,
-    reactionTime: reactionRecorded || "N/A"
-  });
+    // Detect first entry into the correct image's bounding box to mark RT
+    if (trialStartTime !== null && currentTargetIndex && !rtRecorded) {
+        const el = getImageElementForTarget(currentTargetIndex);
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            const gx = data.x;
+            const gy = data.y;
+            if (gx >= rect.left && gx <= rect.right && gy >= rect.top && gy <= rect.bottom) {
+                pendingRT = (Date.now() - trialStartTime) / 1000;
+                rtRecorded = true;
+            }
+        }
+    }
 });
 
+// --- Calibration ---
 function startCalibration() {
-  isCalibrating = true;
-  demographics = {
-    pid: document.getElementById('pid').value,
-    initials: document.getElementById('initials').value,
-    age: document.getElementById('age').value,
-    gender: document.getElementById('gender').value
-  };
-
-  document.getElementById('welcome').style.display = 'none';
-  document.getElementById('experiment').style.display = 'block';
-
-  webgazer.begin().then(() => {
-    webgazer.showVideo(true);
-    webgazer.showFaceOverlay(true);
-    webgazer.showFaceFeedbackBox(true);
-  });
-
-  const positions = [[5,5],[50,5],[95,5],[5,50],[50,50],[95,50],[5,95],[50,95],[95,95]];
-  let clicked = 0;
-
-  positions.forEach(([x, y]) => {
-    const dot = document.createElement("div");
-    dot.className = "calibration-dot";
-    dot.style.left = x + "vw";
-    dot.style.top = y + "vh";
-    dot.onclick = () => {
-      dot.style.background = 'gray';
-      clicked++;
-      if (clicked === 9) finishCalibration();
+    demographics = {
+        pid: document.getElementById('pid').value,
+        initials: document.getElementById('initials').value,
+        age: document.getElementById('age').value,
+        gender: document.getElementById('gender').value
     };
-    document.body.appendChild(dot);
-  });
+
+    document.getElementById('welcome').style.display = 'none';
+    webgazer.begin().then(() => {
+        showCalibrationDots();
+        webgazer.showVideo(true);
+        webgazer.showFaceOverlay(true);
+        webgazer.showFaceFeedbackBox(true);
+    });
+}
+
+function showCalibrationDots() {
+    const positions = [
+        [5,5],[50,5],[95,5],
+        [5,50],[50,50],[95,50],
+        [5,95],[50,95],[95,95]
+    ];
+    let clicked = 0;
+    positions.forEach(pos => {
+        const dot = document.createElement('div');
+        dot.className = 'calibration-dot';
+        dot.style.left = pos[0] + 'vw';
+        dot.style.top = pos[1] + 'vh';
+        dot.onclick = () => {
+            dot.style.background = 'gray';
+            clicked++;
+            if (clicked === 9) finishCalibration();
+        };
+        document.body.appendChild(dot);
+    });
 }
 
 function finishCalibration() {
-  isCalibrating = false;
-  document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
-  webgazer.showVideo(false);
-  webgazer.showFaceOverlay(false);
-  webgazer.showFaceFeedbackBox(false);
-  document.body.style.cursor = 'none';
-  startInstruction();
+    document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
+    webgazer.showVideo(false);
+    webgazer.showFaceOverlay(false);
+    webgazer.showFaceFeedbackBox(false);
+    // Start guided practice before the actual experiment
+    startPractice();
 }
 
-function startInstruction() {
-  if (trialNum >= trialList.length) return endExperiment();
-  const trial = trialList[trialNum];
-  const box = document.getElementById("instructionBox");
-  box.style.display = "block";
-  box.innerText = trial.type === "casual"
-    ? "You will hear an instruction. Look at the image that matches what you hear."
-    : "You will hear a slow instruction. Look at the image that matches what you hear.";
-  setTimeout(() => {
-    box.style.display = "none";
-    showFixation();
-  }, 4000);
+// --- Trial Set ---
+function startTrialSet() {
+    if (currentTrialSet >= trialSets.length) return endExperiment();
+
+    const trial = trialSets[currentTrialSet];
+    stepIndex = 0;
+    currentTargetIndex = null;
+    rtRecorded = false;
+    pendingRT = null;
+
+    document.getElementById('experiment').style.display = 'block';
+    showImages(trial.type); // show images fixed in quadrants
+
+    // Play randomized sentences for this trial's version
+    playNextAudio();
 }
 
-function showFixation() {
-  const fix = document.getElementById("fixation");
-  fix.style.display = "block";
-  setTimeout(() => {
-    fix.style.display = "none";
-    startCountdown();
-  }, FIXATION_DURATION);
+function playNextAudio() {
+    const trial = trialSets[currentTrialSet];
+    const target = trial.order[stepIndex]; // 1..4
+    const audioId = `${trial.type}_${trial.version}_${target}`;
+    const audio = document.getElementById(audioId);
+
+    // initialize per-step tracking
+    trialStartTime = Date.now();
+    currentTargetIndex = target;
+    rtRecorded = false;
+    pendingRT = null;
+
+    audio.play();
+    stepIndex++;
+
+    audio.onended = () => {
+        // finalize per-step result
+        const success = rtRecorded && pendingRT !== null;
+        const rt = success ? pendingRT : null;
+        const t = trialSets[currentTrialSet];
+        trialResults.push({
+            trialSet: currentTrialSet,
+            orderIndex: stepIndex, // 1..4 position in sequence
+            target: target,        // picture number 1..4
+            type: t.type,          // 'colon' or 'covid'
+            version: t.version,    // 'clear' or 'casual'
+            rt: rt,
+            success: success
+        });
+
+        // reset step timing state
+        trialStartTime = null;
+        currentTargetIndex = null;
+        rtRecorded = false;
+        pendingRT = null;
+
+        if (stepIndex < 4) {
+            setTimeout(() => {
+                playNextAudio();
+            }, 500);
+        } else {
+            // End of this trial set: hide images, then show fixation cross for 2s
+            hideImages();
+            showFixation(() => {
+                currentTrialSet++;
+                setTimeout(() => {
+                    startTrialSet();
+                }, 200);
+            });
+        }
+    };
 }
 
-function startCountdown() {
-  instructionStartTime = Date.now();
-  reactionRecorded = false;
-  playAudioAndRunTrial();
+// --- Stimulus Image Control ---
+function showImages(type) {
+    ['colon', 'covid'].forEach(t => {
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById(`${t}${i}`);
+            el.style.display = (t === type) ? 'block' : 'none';
+        }
+    });
+
+    // Center each image in the four quadrants (equal spacing)
+    const positions = [
+        [25, 25], // top-left quadrant center
+        [75, 25], // top-right quadrant center
+        [25, 75], // bottom-left quadrant center
+        [75, 75]  // bottom-right quadrant center
+    ];
+    for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`${type}${i}`);
+        el.style.left = positions[i - 1][0] + 'vw';
+        el.style.top = positions[i - 1][1] + 'vh';
+    }
 }
 
-function playAudioAndRunTrial() {
-  const trial = trialList[trialNum];
-  const audio = document.getElementById("audioPlayer");
-  audio.src = "{{ url_for('static', filename='') }}" + trial.audio;
-  audio.play();
-
-  // Position images
-  const positions = [
-    ["5vw", "5vh"],
-    ["55vw", "5vh"],
-    ["5vw", "50vh"],
-    ["55vw", "50vh"]
-  ];
-  [img1, img2, img3, img4].forEach((img, i) => {
-    img.style.left = positions[i][0];
-    img.style.top = positions[i][1];
-  });
-
-  setTimeout(() => {
-    trialNum++;
-    instructionStartTime = null;
-    startInstruction();
-  }, TRIAL_DURATION);
+function hideImages() {
+    ['colon', 'covid'].forEach(t => {
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById(`${t}${i}`);
+            el.style.display = 'none';
+        }
+    });
 }
 
+// Practice and instruction screens
+function startPractice() {
+    const overlay = document.getElementById('instructionOverlay');
+    const text = document.getElementById('instructionText');
+    const btnCovid = document.getElementById('startCovidPractice');
+    const btnColon = document.getElementById('startColonPractice');
+    const btnBegin = document.getElementById('beginButton');
+
+    function resetButtons() {
+        btnCovid.style.display = 'none';
+        btnColon.style.display = 'none';
+        btnBegin.style.display = 'none';
+    }
+
+    overlay.style.display = 'block';
+    text.textContent = 'Practice: You will be shown the COVID pictures in order (1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right) with their sentences.';
+    resetButtons();
+    btnCovid.style.display = 'inline-block';
+
+    btnCovid.onclick = () => {
+        resetButtons();
+        overlay.style.display = 'none';
+        runPractice('covid', () => {
+            overlay.style.display = 'block';
+            text.textContent = 'Now the COLON pictures will be shown in order with their sentences.';
+            resetButtons();
+            btnColon.style.display = 'inline-block';
+        });
+    };
+
+    btnColon.onclick = () => {
+        resetButtons();
+        overlay.style.display = 'none';
+        runPractice('colon', () => {
+            overlay.style.display = 'block';
+            text.textContent = 'Instructions: You will hear sentences. Use your eyes only to look at the matching picture (1=TL, 2=TR, 3=BL, 4=BR). A + cross will appear for 2 seconds after each trial; fixate on it.';
+            resetButtons();
+            btnBegin.style.display = 'inline-block';
+        });
+    };
+
+    btnBegin.onclick = () => {
+        overlay.style.display = 'none';
+        startTrialSet();
+    };
+}
+
+function runPractice(type, done) {
+    document.getElementById('experiment').style.display = 'block';
+    showImages(type);
+    let i = 1;
+    function playNext() {
+        if (i > 4) {
+            hideImages();
+            if (typeof done === 'function') done();
+            return;
+        }
+        const audio = document.getElementById(`${type}_clear_${i}`); // use clear for practice
+        audio.onended = () => {
+            i++;
+            setTimeout(playNext, 400);
+        };
+        audio.play();
+    }
+    playNext();
+}
+
+// --- Fixation ---
+function showFixation(callback) {
+    const cross = document.getElementById('fixationCross');
+    cross.style.display = 'block';
+    setTimeout(() => {
+        cross.style.display = 'none';
+        callback();
+    }, 2000);
+}
+
+// --- End ---
 function endExperiment() {
-  document.getElementById('experiment').style.display = 'none';
-  document.getElementById('endMessage').style.display = 'block';
+    fetch('/save_gaze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ demographics, gaze: gazeData, results: trialResults })
+    }).then(() => {
+        alert("Thanks for participating! Data saved.");
+    });
+}
 
-  fetch('/save_gaze', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ gaze: gazeData, demographics: demographics })
-  }).then(() => console.log('✅ Data saved.'));
+function shuffle(arr) {
+    return arr.sort(() => Math.random() - 0.5);
+}
+
+function getImageElementForTarget(n) {
+    // When a trial is active, only one type is visible
+    const t = trialSets[currentTrialSet]?.type || 'covid';
+    return document.getElementById(`${t}${n}`);
 }
 </script>
 </body>

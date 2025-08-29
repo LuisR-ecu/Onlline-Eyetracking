@@ -3,61 +3,98 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-plt.switch_backend('Agg')  # Use headless backend for server environments
 
-gaze_data_dir = 'gaze_data'
+def process_file(filepath: str) -> None:
+    """Analyze a single Excel file and emit plots + CSVs next to it."""
+    fname = os.path.basename(filepath)
+    print(f"📄 Processing: {fname}")
 
-def assign_quadrant(x, y, screen_width, screen_height):
-    if x < screen_width / 2 and y < screen_height / 2:
-        return 'Top-Left'
-    elif x >= screen_width / 2 and y < screen_height / 2:
-        return 'Top-Right'
-    elif x < screen_width / 2 and y >= screen_height / 2:
-        return 'Bottom-Left'
+    # Load per-instruction trial results
+    try:
+        results = pd.read_excel(filepath, sheet_name="Trial Results")
+    except Exception as e:
+        print(f"⚠️ No 'Trial Results' in {fname}: {e}")
+        return
+
+    required = {"rt", "version", "target", "success"}
+    if not required.issubset(results.columns):
+        print(f"⚠️ Skipping {fname}: 'Trial Results' missing required columns {sorted(required)}")
+        return
+
+    # Clean and export raw results
+    results['rt'] = pd.to_numeric(results['rt'], errors='coerce')
+    results['success'] = results['success'].astype(bool)
+    raw_csv = filepath.replace('.xlsx', '_trial_results.csv')
+    results.to_csv(raw_csv, index=False)
+    print(f"✅ Raw trial results saved: {raw_csv}")
+
+    # Filter successful trials with valid RT
+    succ = results[results['success'] & results['rt'].notna()].copy()
+    if succ.empty:
+        print(f"⚠️ No successful trials with RT in {fname}")
+        return
+
+    # --- Graph 1: RT by picture number (1..4) ---
+    plt.figure()
+    ax = sns.barplot(data=succ, x='target', y='rt', estimator='mean', errorbar='ci', palette='Blues')
+    ax.set_xlabel('Picture Number (Quadrant: 1=TL, 2=TR, 3=BL, 4=BR)')
+    ax.set_ylabel('Reaction Time (s)')
+    ax.set_title('Reaction Time by Picture Number (successful only)')
+    plt.tight_layout()
+    rt_by_target_path = filepath.replace('.xlsx', '_rt_by_target.png')
+    plt.savefig(rt_by_target_path)
+    print(f"✅ RT by target plot saved: {rt_by_target_path}")
+    plt.close()
+
+    # --- Graph 2: Clear vs Casual RT comparison ---
+    ver_mean = succ.groupby('version')['rt'].mean().to_dict()
+    mean_clear = ver_mean.get('clear')
+    mean_casual = ver_mean.get('casual')
+
+    if mean_clear is not None and mean_casual is not None and mean_casual > 0:
+        improvement_pct = (mean_casual - mean_clear) / mean_casual * 100.0
     else:
-        return 'Bottom-Right'
+        improvement_pct = None
 
-for file in os.listdir(gaze_data_dir):
-    if file.endswith('.xlsx'):
-        filepath = os.path.join(gaze_data_dir, file)
-        print(f"📄 Processing: {file}")
-        df = pd.read_excel(filepath, sheet_name='Gaze Data')
+    plt.figure()
+    order = ['clear', 'casual'] if 'clear' in succ['version'].unique() else None
+    ax = sns.barplot(data=succ, x='version', y='rt', order=order, estimator='mean', errorbar='ci', palette='Set2')
+    ax.set_xlabel('Instruction Style')
+    ax.set_ylabel('Reaction Time (s)')
+    title = 'RT: Clear vs Casual'
+    if improvement_pct is not None:
+        title += f" (Clear faster by {improvement_pct:.1f}%)"
+    ax.set_title(title)
+    plt.tight_layout()
+    cmp_path = filepath.replace('.xlsx', '_rt_clear_vs_casual.png')
+    plt.savefig(cmp_path)
+    print(f"✅ Clear vs casual RT plot saved: {cmp_path}")
+    plt.close()
 
-        df['time'] = pd.to_numeric(df['time'], errors='coerce')
-        df = df.dropna(subset=['time', 'x', 'y'])
+    # Save summary CSV with means and improvement percent
+    summary_rows = []
+    for v in ['clear', 'casual']:
+        if v in ver_mean:
+            summary_rows.append({'version': v, 'mean_rt': ver_mean[v]})
+    summary_df = pd.DataFrame(summary_rows)
+    if improvement_pct is not None:
+        # Add a row for improvement
+        summary_df = pd.concat([
+            summary_df,
+            pd.DataFrame([{'version': 'clear_vs_casual_improvement_pct', 'mean_rt': improvement_pct}])
+        ], ignore_index=True)
+    summary_csv = filepath.replace('.xlsx', '_rt_version_summary.csv')
+    summary_df.to_csv(summary_csv, index=False)
+    print(f"✅ Version RT summary saved: {summary_csv}")
 
-        df['bin'] = (df['time'] // 5).astype(int)
-        binned = df.groupby(['trial', 'bin']).agg({
-            'x': 'mean',
-            'y': 'mean',
-            'reactionTime': 'first',
-            'lookedAtTarget': 'max'
-        }).reset_index()
 
-        screen_width = 1280
-        screen_height = 720
-        binned['quadrant'] = binned.apply(lambda row: assign_quadrant(row['x'], row['y'], screen_width, screen_height), axis=1)
+def process_all(data_dir: str = "gaze_data") -> None:
+    for fname in os.listdir(data_dir):
+        if not fname.endswith(".xlsx"):
+            continue
+        process_file(os.path.join(data_dir, fname))
 
-        # Reaction Time Plot
-        rt_plot = binned[binned['lookedAtTarget'] == True].groupby('trial')['reactionTime'].first()
-        plt.figure(figsize=(10, 5))
-        rt_plot.plot(kind='bar')
-        plt.title('Reaction Time by Trial')
-        plt.ylabel('Seconds')
-        plt.xlabel('Trial')
-        plt.tight_layout()
-        plt.savefig(filepath.replace('.xlsx', '_reaction_time.png'))
-        plt.close()
 
-        # Quadrant Scatter Plot
-        plt.figure(figsize=(8, 6))
-        sns.scatterplot(data=binned, x='x', y='y', hue='quadrant', palette='tab10')
-        plt.gca().invert_yaxis()
-        plt.title('Binned Gaze Points by Quadrant')
-        plt.xlabel('X Coordinate')
-        plt.ylabel('Y Coordinate')
-        plt.tight_layout()
-        plt.savefig(filepath.replace('.xlsx', '_quadrants.png'))
-        plt.close()
-
-        print("✅ Saved plots for", file)
+if __name__ == "__main__":
+    process_all()
+ 
