@@ -24,6 +24,18 @@
             cursor: pointer;
             z-index: 20;
         }
+        #validationDot {
+            width: 24px;
+            height: 24px;
+            background: #ff6600;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            display: none;
+            z-index: 45;
+        }
         #instructionOverlay {
             position: absolute;
             top: 30%;
@@ -34,6 +46,24 @@
             border: 2px solid black;
             z-index: 50;
             text-align: center;
+        }
+        #calibrationValidation {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid black;
+            padding: 24px;
+            z-index: 70;
+            width: min(90vw, 460px);
+            text-align: center;
+            display: none;
+        }
+        #calibrationValidation button {
+            margin-top: 12px;
+            font-size: 1rem;
+            padding: 0.5rem 1.5rem;
         }
         #fixationCross {
             position: absolute;
@@ -48,6 +78,14 @@
 <body>
 
 <div id="gazeDot"></div>
+<div id="validationDot"></div>
+
+<div id="calibrationValidation">
+    <h2 id="calibrationValidationText"></h2>
+    <button id="beginValidation">Start Check</button>
+    <button id="retryCalibration" style="display:none;">Recalibrate</button>
+    <button id="continueAfterValidation" style="display:none;">Continue</button>
+</div>
 
 <div id="welcome" style="position:absolute;top:10%;left:10%;width:80%;text-align:center;z-index:50;">
     <h1>Welcome to the Eye Tracking Experiment</h1>
@@ -95,6 +133,10 @@
 
 <script src="{{ url_for('static', filename='webgazer.js') }}"></script>
 <script>
+const ENABLE_CALIBRATION_VALIDATION = false; // toggle this to show/hide post-calibration check
+const GAZE_SMOOTHING_WINDOW = 5; // number of samples to average
+const GAZE_LOG_INTERVAL_MS = 50; // minimum milliseconds between saved gaze rows
+
 let trialSets = [];
 let currentTrialSet = 0;
 let stepIndex = 0; // 0..3 within a trial set
@@ -109,6 +151,19 @@ let isFixating = false;
 let currentTargetIndex = null; // 1..4 corresponding to quadrant number
 let rtRecorded = false;
 let pendingRT = null;
+let gazeSmoothingBuffer = [];
+let lastSmoothedGaze = null;
+let lastGazeLogTime = 0;
+let validationSamples = [];
+let validationInterval = null;
+let validationTimeout = null;
+
+const validationOverlay = document.getElementById('calibrationValidation');
+const validationText = document.getElementById('calibrationValidationText');
+const validationStartButton = document.getElementById('beginValidation');
+const validationRetryButton = document.getElementById('retryCalibration');
+const validationContinueButton = document.getElementById('continueAfterValidation');
+const validationDot = document.getElementById('validationDot');
 
 // --- Define all trial sets ---
 ['colon', 'covid'].forEach(type => {
@@ -122,18 +177,56 @@ let pendingRT = null;
 });
 trialSets = shuffle(trialSets);
 
+function processGazeSample(sample) {
+    if (!sample || typeof sample.x !== 'number' || typeof sample.y !== 'number') {
+        return null;
+    }
+    gazeSmoothingBuffer.push({ x: sample.x, y: sample.y });
+    if (gazeSmoothingBuffer.length > GAZE_SMOOTHING_WINDOW) {
+        gazeSmoothingBuffer.shift();
+    }
+
+    let avgX = 0;
+    let avgY = 0;
+    gazeSmoothingBuffer.forEach(point => {
+        avgX += point.x;
+        avgY += point.y;
+    });
+    avgX /= gazeSmoothingBuffer.length;
+    avgY /= gazeSmoothingBuffer.length;
+
+    lastSmoothedGaze = { x: avgX, y: avgY };
+    return lastSmoothedGaze;
+}
+
+function getCurrentSmoothedGaze() {
+    return lastSmoothedGaze;
+}
+
+function resetGazeSmoothing() {
+    gazeSmoothingBuffer = [];
+    lastSmoothedGaze = null;
+}
+
 // --- Gaze Listener ---
 webgazer.setGazeListener((data, timestamp) => {
-    if (!data) return;
-    if (trialStartTime !== null) {
+    const smoothed = processGazeSample(data);
+    if (!smoothed) return;
+
+    const now = Date.now();
+    const gazeX = smoothed.x;
+    const gazeY = smoothed.y;
+
+    if (trialStartTime !== null && now - lastGazeLogTime >= GAZE_LOG_INTERVAL_MS) {
         gazeData.push({
             trialSet: currentTrialSet,
             step: stepIndex + 1,
             target: currentTargetIndex,
-            time: (Date.now() - trialStartTime) / 1000,
-            x: data.x,
-            y: data.y
+            time: (now - trialStartTime) / 1000,
+            x: gazeX,
+            y: gazeY
         });
+        lastGazeLogTime = now;
     }
 
     // Detect first entry into the correct image's bounding box to mark RT
@@ -141,10 +234,8 @@ webgazer.setGazeListener((data, timestamp) => {
         const el = getImageElementForTarget(currentTargetIndex);
         if (el) {
             const rect = el.getBoundingClientRect();
-            const gx = data.x;
-            const gy = data.y;
-            if (gx >= rect.left && gx <= rect.right && gy >= rect.top && gy <= rect.bottom) {
-                pendingRT = (Date.now() - trialStartTime) / 1000;
+            if (gazeX >= rect.left && gazeX <= rect.right && gazeY >= rect.top && gazeY <= rect.bottom) {
+                pendingRT = (now - trialStartTime) / 1000;
                 rtRecorded = true;
             }
         }
@@ -161,15 +252,20 @@ function startCalibration() {
     };
 
     document.getElementById('welcome').style.display = 'none';
+    resetGazeSmoothing();
+    lastGazeLogTime = 0;
     webgazer.begin().then(() => {
         showCalibrationDots();
-        webgazer.showVideo(true);
-        webgazer.showFaceOverlay(true);
-        webgazer.showFaceFeedbackBox(true);
     });
 }
 
 function showCalibrationDots() {
+    resetValidationCapture();
+    validationDot.style.display = 'none';
+    document.querySelectorAll('.calibration-dot').forEach(dot => dot.remove());
+    webgazer.showVideo(true);
+    webgazer.showFaceOverlay(true);
+    webgazer.showFaceFeedbackBox(true);
     const positions = [
         [5,5],[50,5],[95,5],
         [5,50],[50,50],[95,50],
@@ -195,8 +291,107 @@ function finishCalibration() {
     webgazer.showVideo(false);
     webgazer.showFaceOverlay(false);
     webgazer.showFaceFeedbackBox(false);
-    // Start guided practice before the actual experiment
-    startPractice();
+    if (ENABLE_CALIBRATION_VALIDATION) {
+        startCalibrationValidation();
+    } else {
+        startPractice();
+    }
+}
+
+function startCalibrationValidation() {
+    if (!ENABLE_CALIBRATION_VALIDATION) return;
+    resetValidationCapture();
+    validationSamples = [];
+    validationText.textContent = 'Calibration check: click Start Check and keep your eyes on the orange dot.';
+    validationStartButton.textContent = 'Start Check';
+    validationStartButton.style.display = 'inline-block';
+    validationRetryButton.style.display = 'none';
+    validationContinueButton.style.display = 'none';
+    validationOverlay.style.display = 'block';
+}
+
+function runCalibrationValidation() {
+    resetValidationCapture();
+    validationSamples = [];
+    validationDot.style.display = 'block';
+
+    validationInterval = setInterval(() => {
+        const prediction = getCurrentSmoothedGaze() || webgazer.getCurrentPrediction();
+        if (prediction && typeof prediction.x === 'number' && typeof prediction.y === 'number') {
+            validationSamples.push({ x: prediction.x, y: prediction.y });
+        }
+    }, 100);
+
+    validationTimeout = setTimeout(() => {
+        const targetRect = validationDot.getBoundingClientRect();
+        resetValidationCapture();
+        validationDot.style.display = 'none';
+        evaluateCalibrationValidation(targetRect);
+    }, 1200);
+}
+
+function evaluateCalibrationValidation(targetRect) {
+    const count = validationSamples.length;
+    let avgX = 0;
+    let avgY = 0;
+
+    if (count > 0) {
+        validationSamples.forEach(sample => {
+            avgX += sample.x;
+            avgY += sample.y;
+        });
+        avgX /= count;
+        avgY /= count;
+    }
+
+    const targetX = targetRect.left + targetRect.width / 2;
+    const targetY = targetRect.top + targetRect.height / 2;
+    const distance = count > 0 ? Math.hypot(avgX - targetX, avgY - targetY) : Infinity;
+    const threshold = 120;
+
+    if (count > 0 && distance <= threshold) {
+        validationText.textContent = 'Nice! Calibration looks accurate. Click Continue to move on.';
+        validationStartButton.style.display = 'none';
+        validationRetryButton.style.display = 'none';
+        validationContinueButton.style.display = 'inline-block';
+    } else {
+        validationText.textContent = 'Tracking looks off. Try the check again or redo the 9-point calibration.';
+        validationStartButton.textContent = 'Try Again';
+        validationStartButton.style.display = 'inline-block';
+        validationRetryButton.style.display = 'inline-block';
+        validationContinueButton.style.display = 'none';
+    }
+
+    validationOverlay.style.display = 'block';
+    validationSamples = [];
+}
+
+function resetValidationCapture() {
+    if (validationInterval) {
+        clearInterval(validationInterval);
+        validationInterval = null;
+    }
+    if (validationTimeout) {
+        clearTimeout(validationTimeout);
+        validationTimeout = null;
+    }
+}
+
+if (validationStartButton && validationRetryButton && validationContinueButton) {
+    validationStartButton.addEventListener('click', () => {
+        validationOverlay.style.display = 'none';
+        runCalibrationValidation();
+    });
+
+    validationRetryButton.addEventListener('click', () => {
+        validationOverlay.style.display = 'none';
+        showCalibrationDots();
+    });
+
+    validationContinueButton.addEventListener('click', () => {
+        validationOverlay.style.display = 'none';
+        startPractice();
+    });
 }
 
 // --- Trial Set ---
@@ -223,6 +418,8 @@ function playNextAudio() {
     const audio = document.getElementById(audioId);
 
     // initialize per-step tracking
+    resetGazeSmoothing();
+    lastGazeLogTime = 0;
     trialStartTime = Date.now();
     currentTargetIndex = target;
     rtRecorded = false;

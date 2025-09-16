@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calibration Instructions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 2rem;
+        }
+        button {
+            font-size: 1.2rem;
+            padding: 0.75rem 2rem;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Before We Begin</h1>
+    <p>Thank you for volunteering! We will start with a brief webcam calibration to align the gaze tracker with your eyes. Please read the steps below so the calibration is as accurate as possible.</p>
+
+    <div style="max-width: 720px; margin: 0 auto; text-align: left; line-height: 1.6;">
+        <h2>What to do</h2>
+        <ol>
+            <li>Find a well-lit spot, sit at arm's length from the screen, and keep the webcam at eye level.</li>
+            <li>Remove anything covering your face (e.g., hats) and make sure your eyes are clearly visible.</li>
+            <li>Click <strong>Start Calibration</strong> below. Your browser will ask for webcam permission, so please allow it.</li>
+            <li>You will see nine blue dots arranged around the screen and a small webcam window. For each dot:
+                <ul>
+                    <li>Look directly at the dot while keeping your head as still as you can.</li>
+                    <li>Click the dot once while continuing to stare at it. The dot will turn gray to show it was recorded.</li>
+                </ul>
+            </li>
+            <li>Work through all nine dots (corners, edges, and center). When the last dot turns gray, calibration finishes automatically and the practice session begins.</li>
+            <li>If something goes wrong, refresh the page to restart the calibration.</li>
+        </ol>
+
+        <p>Take your time during calibration - the more precise you are now, the easier the study will feel.</p>
+    </div>
+
+    <form action="{{ url_for('calibration') }}" method="get">
+        <button type="submit">Start Calibration</button>
+    </form>
+</body>
+</html>

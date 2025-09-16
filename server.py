@@ -13,7 +13,12 @@ if not os.path.exists('gaze_data'):
     os.makedirs('gaze_data')
 
 @app.route('/')
-def index():
+def instructions():
+    return render_template('instructions.html')
+
+
+@app.route('/calibration')
+def calibration():
     return render_template('index.html')
 
 @app.route('/save_gaze', methods=['POST'])
