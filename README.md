@@ -10,7 +10,7 @@ All gaze data is saved automatically to Excel files for later analysis.
 ## 🔬 Features
 
 - **Consent + Participant ID** collection before trials.
-- **Calibration** using 9 evenly spaced clickable points.
+- **Calibration flow** with a dedicated instruction page, 9-point click targets, and optional on-screen accuracy check.
 - **Real-time gaze tracking** via WebGazer.js.
 - **Images + Audio stimuli** randomized across trials.
 - **Flexible trial types**: silent, slow (casual audio), fast (rushed audio).
@@ -90,10 +90,28 @@ You’ll get:
 
 ---
 
-## 📝 Participant Instructions (for pauses between trials)
+## 📝 Participant Journey
+
+- **Landing & consent:** Participant enters ID, initials, age, and gender before continuing.
+- **Calibration prep:** Dedicated instruction page explains webcam setup and how to complete the 9-point calibration.
+- **Calibration & validation:** WebGazer.js guides participants through nine dots; researchers can enable an optional accuracy check by toggling `ENABLE_CALIBRATION_VALIDATION` in `templates/index.html`.
+- **Guided practice:** Practice trials play COVID/colon sentences with matching images so participants learn the eye-only response pattern.
+- **Experimental blocks:** Randomized trials with fixation crosses between each step.
+- **Data save:** On completion, gaze traces and reaction metrics are written to Excel and background analysis is triggered.
+
+### In-experiment Reminders
 
 - **Silent** → Read each instruction and look at the matching image before continuing.
 - **Slow/Fast** → Listen to the audio instruction and look at the matching image.
+
+## ⚙️ Gaze Smoothing & Logging
+
+To reduce webcam jitter while preserving reaction timing, the client averages the last few WebGazer predictions and throttles logging to once every `GAZE_LOG_INTERVAL_MS` (default 50 ms). Adjust these constants in `templates/index.html`:
+
+- `GAZE_SMOOTHING_WINDOW`: number of recent samples (default 5) included in the moving average.
+- `GAZE_LOG_INTERVAL_MS`: minimum milliseconds between saved gaze rows.
+
+Set `ENABLE_CALIBRATION_VALIDATION = true` in the same file to show the post-calibration accuracy check overlay; leave it `false` for smoother testing sessions.
 
 ---
 
